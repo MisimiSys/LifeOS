@@ -68,7 +68,10 @@ function dateFromIso(dateIso: string) {
 }
 
 function isoFromDate(date: Date) {
-  return date.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function todayIso() {
@@ -113,28 +116,82 @@ function signalsForDate(dateIso: string) {
   }
 }
 
-function fastingForDate(dateIso: string): FastingSession {
+function dateTimeFromIsoAndTime(dateIso: string, time: string) {
+  return new Date(`${dateIso}T${time}:00`)
+}
+
+function calculateElapsedHours({
+  dateIso,
+  startedAt,
+  targetEndAt,
+  targetHours,
+  now,
+}: {
+  dateIso: string
+  startedAt: string
+  targetEndAt: string
+  targetHours: number
+  now: Date
+}) {
+  const startDate = shiftDate(dateIso, -1)
+  const start = dateTimeFromIsoAndTime(startDate, startedAt)
+  const targetEnd = dateTimeFromIsoAndTime(dateIso, targetEndAt)
+  const selected = dateFromIso(dateIso)
+  const today = dateFromIso(todayIso())
+
+  if (selected.getTime() < today.getTime()) return targetHours
+  if (selected.getTime() > today.getTime()) return 0
+  if (now.getTime() <= start.getTime()) return 0
+  if (now.getTime() >= targetEnd.getTime()) return targetHours
+
+  const elapsedMs = now.getTime() - start.getTime()
+  return Math.max(0, Math.min(targetHours, elapsedMs / (1000 * 60 * 60)))
+}
+
+function fastingStatusForElapsed(elapsedHours: number, targetHours: number): FastingSession['status'] {
+  if (elapsedHours <= 0) return 'Planned'
+  if (elapsedHours >= targetHours) return 'Eating Window'
+  return 'Fasting'
+}
+
+function fastingForDate(dateIso: string, now: Date): FastingSession {
   if (isRelaxDay(dateIso)) {
+    const elapsedHours = calculateElapsedHours({
+      dateIso,
+      startedAt: '21:00',
+      targetEndAt: '11:00',
+      targetHours: 14,
+      now,
+    })
+
     return {
       protocol: 'No strict fast',
-      status: 'Eating Window',
+      status: fastingStatusForElapsed(elapsedHours, 14),
       startedAt: '21:00',
       targetEndAt: '11:00',
       eatingWindow: '11:00-20:00',
       targetHours: 14,
-      elapsedHours: 14,
+      elapsedHours,
       hydrationTargetLiters: 3,
     }
   }
 
+  const elapsedHours = calculateElapsedHours({
+    dateIso,
+    startedAt: '20:00',
+    targetEndAt: '12:00',
+    targetHours: 16,
+    now,
+  })
+
   return {
     protocol: '16:8',
-    status: 'Fasting',
+    status: fastingStatusForElapsed(elapsedHours, 16),
     startedAt: '20:00',
     targetEndAt: '12:00',
     eatingWindow: '12:00-20:00',
     targetHours: 16,
-    elapsedHours: 11,
+    elapsedHours,
     hydrationTargetLiters: 3.2,
   }
 }
@@ -304,11 +361,11 @@ function prioritiesForDate(dateIso: string) {
   ]
 }
 
-export function getPlanForDate(dateIso: string): DailyCommandPlan {
+export function getPlanForDate(dateIso: string, now = new Date()): DailyCommandPlan {
   const importedSignals = signalsForDate(dateIso)
   const relax = isRelaxDay(dateIso)
   const workout = workoutForDate(dateIso)
-  const fasting = fastingForDate(dateIso)
+  const fasting = fastingForDate(dateIso, now)
   const dayType: DayType = relax ? 'Relax' : 'Fasting/Healthy'
   const nutritionMode: NutritionMode = relax ? 'Yoruba relax' : 'Yoruba low-carb'
 

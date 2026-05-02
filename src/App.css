@@ -180,6 +180,8 @@ h3 {
 
 .fast-ring {
   --fast-progress: 0%;
+  --phase-pointer-angle: 0deg;
+  position: relative;
   width: 210px;
   aspect-ratio: 1;
   margin: 24px auto;
@@ -191,9 +193,31 @@ h3 {
     conic-gradient(#1b5e59 0 var(--fast-progress), #d8ded4 var(--fast-progress) 100%);
 }
 
+.phase-pointer {
+  position: absolute;
+  inset: -4px;
+  transform: rotate(var(--phase-pointer-angle));
+  pointer-events: none;
+}
+
+.phase-pointer svg {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 3px solid #fffdf8;
+  border-radius: 50%;
+  background: #ba7a23;
+  color: #ffffff;
+  transform: translateX(-50%) rotate(calc(var(--phase-pointer-angle) * -1));
+  box-shadow: 0 10px 24px rgba(186, 122, 35, 0.28);
+}
+
 .fast-ring span {
   display: block;
-  font-size: 44px;
+  font-size: 34px;
   font-weight: 900;
 }
 
@@ -206,7 +230,7 @@ h3 {
 
 .fast-meta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
@@ -233,6 +257,59 @@ h3 {
   align-items: center;
   gap: 12px;
   margin-top: 8px;
+}
+
+.phase-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.phase-chip {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  position: relative;
+  padding: 9px 10px 9px 24px;
+  border: 1px solid rgba(23, 32, 29, 0.1);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.phase-chip svg {
+  position: absolute;
+  left: 7px;
+  top: 12px;
+  color: #ba7a23;
+}
+
+.phase-chip span {
+  color: #63726d;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.phase-chip strong {
+  color: #273631;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.phase-chip-completed {
+  border-color: rgba(34, 132, 82, 0.26);
+  background: rgba(34, 132, 82, 0.08);
+}
+
+.phase-chip-active {
+  border-color: rgba(186, 122, 35, 0.46);
+  background: rgba(186, 122, 35, 0.14);
+}
+
+.phase-chip-upcoming {
+  opacity: 0.72;
 }
 
 .phase-callout {
@@ -442,6 +519,17 @@ h3 {
   background: #fffdf8;
 }
 
+.phase-marker {
+  position: relative;
+}
+
+.phase-marker svg {
+  position: absolute;
+  top: 2px;
+  left: -12px;
+  color: #ba7a23;
+}
+
 .phase-row h3 {
   margin-bottom: 6px;
 }
@@ -559,6 +647,7 @@ h3 {
   nav,
   .signal-grid,
   .fast-meta,
+  .phase-rail,
   .metric-grid {
     grid-template-columns: 1fr;
   }

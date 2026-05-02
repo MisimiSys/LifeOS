@@ -2,6 +2,7 @@ import {
   Apple,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   Database,
   Dumbbell,
   ExternalLink,
@@ -14,7 +15,7 @@ import {
   Utensils,
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getPlanForDate, getWeekPreview, shiftDate, todayIso } from './data/today'
 import { fastingProgress } from './domain/lifeos'
 import './App.css'
@@ -29,13 +30,26 @@ function readinessLabel(readiness: string) {
   return 'Recovery day'
 }
 
+function formatFastHours(hours: number) {
+  const wholeHours = Math.floor(hours)
+  const minutes = Math.floor((hours - wholeHours) * 60)
+  return `${wholeHours}h ${minutes.toString().padStart(2, '0')}m`
+}
+
 function App() {
   const [selectedDate, setSelectedDate] = useState(todayIso)
-  const todayPlan = useMemo(() => getPlanForDate(selectedDate), [selectedDate])
+  const [clock, setClock] = useState(() => new Date())
+  const todayPlan = useMemo(() => getPlanForDate(selectedDate, clock), [selectedDate, clock])
   const weekPreview = useMemo(() => getWeekPreview(selectedDate), [selectedDate])
   const { log, fasting, fastingPhases, meals, workout, syncMetrics, priorities } = todayPlan
   const progress = fastingProgress(fasting)
   const activeFastingPhase = fastingPhases.find((phase) => phase.status === 'Active') ?? fastingPhases[0]
+  const phasePointerAngle = progress * 3.6
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const commandSignals = [
     {
@@ -164,11 +178,28 @@ function App() {
             </div>
             <div
               className="fast-ring"
-              style={{ '--fast-progress': `${progress}%` } as CSSProperties}
+              style={
+                {
+                  '--fast-progress': `${progress}%`,
+                  '--phase-pointer-angle': `${phasePointerAngle}deg`,
+                } as CSSProperties
+              }
               aria-label={`Fasting progress ${progress} percent`}
             >
-              <span>{progress}%</span>
+              <div className="phase-pointer" aria-hidden="true">
+                <Flame size={17} />
+              </div>
+              <span>{formatFastHours(fasting.elapsedHours)}</span>
               <small>{fasting.status}</small>
+            </div>
+            <div className="phase-rail" aria-label="Fasting phase progress">
+              {fastingPhases.map((phase) => (
+                <div className={`phase-chip phase-chip-${phase.status.toLowerCase()}`} key={phase.id}>
+                  {phase.status === 'Active' ? <ChevronRight size={14} aria-hidden="true" /> : null}
+                  <span>{phase.window}</span>
+                  <strong>{phase.name}</strong>
+                </div>
+              ))}
             </div>
             <div className="fast-meta">
               <p>
@@ -182,6 +213,10 @@ function App() {
               <p>
                 <strong>{fasting.eatingWindow}</strong>
                 Window
+              </p>
+              <p>
+                <strong>{progress}%</strong>
+                Complete
               </p>
             </div>
             <div className="fast-note">
@@ -271,6 +306,7 @@ function App() {
               {fastingPhases.map((phase) => (
                 <section className={`phase-row phase-${phase.status.toLowerCase()}`} key={phase.id}>
                   <div className="phase-marker">
+                    {phase.status === 'Active' ? <ChevronRight size={18} aria-hidden="true" /> : null}
                     <strong>{phase.window}</strong>
                     <span>{phase.status}</span>
                   </div>
