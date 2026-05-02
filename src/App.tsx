@@ -14,6 +14,7 @@ import type { CSSProperties } from 'react'
 import { todayPlan } from './data/today'
 import { fastingProgress } from './domain/lifeos'
 import './App.css'
+import './TodayDashboard.css'
 
 function readinessLabel(readiness: string) {
   if (readiness === 'Green') return 'Train as planned'
