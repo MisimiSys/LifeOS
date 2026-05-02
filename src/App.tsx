@@ -1,9 +1,7 @@
 import {
-  Activity,
   Apple,
   CalendarDays,
   CheckCircle2,
-  CircleDashed,
   Dumbbell,
   Gauge,
   HeartPulse,
@@ -12,98 +10,49 @@ import {
   TimerReset,
   Utensils,
 } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { todayPlan } from './data/today'
+import { fastingProgress } from './domain/lifeos'
 import './App.css'
+import './TodayDashboard.css'
 
-type Readiness = 'Green' | 'Yellow' | 'Red'
-
-type DailySignal = {
-  label: string
-  value: string
-  detail: string
-  trend: 'good' | 'watch' | 'neutral'
-}
-
-type WorkoutBlock = {
-  day: string
-  title: string
-  lifts: string[]
-  accessories: string
-}
-
-const todaySignals: DailySignal[] = [
-  {
-    label: 'Fast',
-    value: '16:8',
-    detail: 'Eating window 12pm-8pm',
-    trend: 'good',
-  },
-  {
-    label: 'Nutrition',
-    value: 'Yoruba low-carb',
-    detail: 'Soup/obe + protein + low-carb vehicle',
-    trend: 'good',
-  },
-  {
-    label: 'Training',
-    value: 'StrongLifts A',
-    detail: 'Squat, bench, row',
-    trend: 'neutral',
-  },
-  {
-    label: 'Sync',
-    value: 'Health Connect',
-    detail: 'Fitbit app -> Health Connect -> LifeOS',
-    trend: 'watch',
-  },
-]
-
-const weeklyWorkouts: WorkoutBlock[] = [
-  {
-    day: 'Monday',
-    title: 'Workout A',
-    lifts: ['Back Squat 5x5', 'Bench Press 5x5', 'Barbell Row 5x5'],
-    accessories: 'Dips, plank, elliptical cooldown',
-  },
-  {
-    day: 'Wednesday',
-    title: 'Workout B',
-    lifts: ['Back Squat 5x5', 'Overhead Press 5x5', 'Deadlift 1x5 or Trap Bar 3x3-5'],
-    accessories: 'Lat pulldown, leg curl, mobility',
-  },
-  {
-    day: 'Friday',
-    title: 'Workout A',
-    lifts: ['Back Squat 5x5', 'Bench Press 5x5', 'Barbell Row 5x5'],
-    accessories: 'Farmer carry, dumbbell row, easy Zone 2',
-  },
-]
-
-const foodRules = [
-  'Fasting suppers: ewedu, efo riro, ila alasepo, obe ata, ayamase-style sauce',
-  'Low-carb vehicles: cabbage swallow, eggplant swallow, cauliflower rice, cabbage rice',
-  'Relax days: controlled amala, ofada, ewa, asaro, roasted corn + ube',
-  'No-go signal: prawns, catfish, crayfish, afang, ogbono, oha, nsala, miyan kuka, miyan taushe, tuwo shinkafa',
-]
-
-const syncFields = [
-  'Sleep hours',
-  'Sleep score',
-  'Resting HR',
-  'Steps',
-  'Active Zone Minutes',
-  'Calories',
-  'Workout minutes',
-  'Weight',
-]
-
-function readinessLabel(readiness: Readiness) {
+function readinessLabel(readiness: string) {
   if (readiness === 'Green') return 'Train as planned'
   if (readiness === 'Yellow') return 'Train, hold load'
   return 'Recovery day'
 }
 
+const progress = fastingProgress(todayPlan.fasting)
+
 function App() {
-  const readiness: Readiness = 'Green'
+  const { log, fasting, meals, workout, syncMetrics, priorities } = todayPlan
+
+  const commandSignals = [
+    {
+      label: 'Day type',
+      value: log.dayType,
+      detail: `${log.day}, ${log.date}`,
+      trend: log.dayType === 'Relax' ? 'watch' : 'good',
+    },
+    {
+      label: 'Nutrition',
+      value: log.nutritionMode,
+      detail: `${meals.length} planned eating decisions`,
+      trend: 'good',
+    },
+    {
+      label: 'Workout',
+      value: workout.plan,
+      detail: workout.focus,
+      trend: workout.status === 'Optional' ? 'neutral' : 'good',
+    },
+    {
+      label: 'Sync',
+      value: 'Health Connect',
+      detail: `${syncMetrics.length} Fitbit signals staged`,
+      trend: 'watch',
+    },
+  ] as const
 
   return (
     <main className="app-shell">
@@ -127,9 +76,9 @@ function App() {
             <TimerReset size={18} aria-hidden="true" />
             Fasting
           </a>
-          <a href="#nutrition">
+          <a href="#meals">
             <Utensils size={18} aria-hidden="true" />
-            Nutrition
+            Meals
           </a>
           <a href="#fitness">
             <Dumbbell size={18} aria-hidden="true" />
@@ -146,42 +95,50 @@ function App() {
         <header className="topbar">
           <div>
             <span className="eyebrow">May 2026 build</span>
-            <h1>LifeOS Command Center</h1>
+            <h1>Today Command Center</h1>
           </div>
-          <div className={`readiness readiness-${readiness.toLowerCase()}`}>
-            <span>{readiness}</span>
-            <strong>{readinessLabel(readiness)}</strong>
+          <div className={`readiness readiness-${log.readiness.toLowerCase()}`}>
+            <span>{log.readiness}</span>
+            <strong>{readinessLabel(log.readiness)}</strong>
           </div>
         </header>
 
         <section id="today" className="hero-grid">
-          <article className="fast-card">
+          <article id="fasting" className="fast-card">
             <div className="card-header">
               <TimerReset size={22} aria-hidden="true" />
               <span>Fasting core</span>
             </div>
-            <div className="fast-ring" aria-label="Fasting progress 68 percent">
-              <span>68%</span>
-              <small>fasted</small>
+            <div
+              className="fast-ring"
+              style={{ '--fast-progress': `${progress}%` } as CSSProperties}
+              aria-label={`Fasting progress ${progress} percent`}
+            >
+              <span>{progress}%</span>
+              <small>{fasting.status}</small>
             </div>
             <div className="fast-meta">
               <p>
-                <strong>20:00</strong>
+                <strong>{fasting.startedAt}</strong>
                 Start
               </p>
               <p>
-                <strong>12:00</strong>
+                <strong>{fasting.targetEndAt}</strong>
                 Break fast
               </p>
               <p>
-                <strong>8h</strong>
-                Eat window
+                <strong>{fasting.eatingWindow}</strong>
+                Window
               </p>
+            </div>
+            <div className="fast-note">
+              <strong>{fasting.protocol}</strong>
+              <span>{fasting.hydrationTargetLiters}L water target</span>
             </div>
           </article>
 
           <div className="signal-grid">
-            {todaySignals.map((signal) => (
+            {commandSignals.map((signal) => (
               <article className={`signal-card signal-${signal.trend}`} key={signal.label}>
                 <span>{signal.label}</span>
                 <strong>{signal.value}</strong>
@@ -192,98 +149,92 @@ function App() {
         </section>
 
         <section className="content-grid">
-          <article id="nutrition" className="panel nutrition-panel">
+          <article id="meals" className="panel meals-panel">
             <div className="panel-title">
               <Apple size={20} aria-hidden="true" />
-              <h2>Nutrition System</h2>
+              <h2>Meal Timeline</h2>
             </div>
-            <div className="plate-visual" aria-label="Yoruba low carb plate model">
-              <div>
-                <span>Obe / Soup</span>
-                <strong>Efo, ewedu, ila</strong>
-              </div>
-              <div>
-                <span>Protein</span>
-                <strong>Eggs, gizzard, alaran</strong>
-              </div>
-              <div>
-                <span>Vehicle</span>
-                <strong>Cabbage / cauliflower</strong>
-              </div>
-            </div>
-            <ul className="rule-list">
-              {foodRules.map((rule) => (
-                <li key={rule}>
-                  <CheckCircle2 size={16} aria-hidden="true" />
-                  {rule}
-                </li>
+            <div className="meal-stack">
+              {meals.map((meal) => (
+                <section className={`meal-row carb-${meal.carbSignal.toLowerCase()}`} key={meal.id}>
+                  <div className="meal-time">
+                    <strong>{meal.time}</strong>
+                    <span>{meal.role}</span>
+                  </div>
+                  <div>
+                    <div className="meal-heading">
+                      <h3>{meal.title}</h3>
+                      <span>{meal.status}</span>
+                    </div>
+                    <p>{meal.items.join(', ')}</p>
+                    {meal.budgetBackup ? <small>{meal.budgetBackup}</small> : null}
+                  </div>
+                </section>
               ))}
-            </ul>
+            </div>
           </article>
 
-          <article id="fitness" className="panel">
+          <article id="fitness" className="panel workout-panel">
             <div className="panel-title">
               <Dumbbell size={20} aria-hidden="true" />
-              <h2>StrongLifts Home Gym</h2>
+              <h2>Training</h2>
+            </div>
+            <div className="workout-status">
+              <span>{workout.status}</span>
+              <strong>{workout.focus}</strong>
             </div>
             <div className="workout-stack">
-              {weeklyWorkouts.map((workout) => (
-                <div className="workout-row" key={workout.day}>
-                  <div>
-                    <span>{workout.day}</span>
-                    <strong>{workout.title}</strong>
-                  </div>
-                  <ul>
-                    {workout.lifts.map((lift) => (
-                      <li key={lift}>{lift}</li>
-                    ))}
-                  </ul>
-                  <p>{workout.accessories}</p>
-                </div>
-              ))}
+              <div className="workout-row">
+                <span>Main work</span>
+                <ul>
+                  {workout.lifts.map((lift) => (
+                    <li key={lift}>{lift}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="workout-row">
+                <span>Accessories</span>
+                <ul>
+                  {workout.accessories.map((accessory) => (
+                    <li key={accessory}>{accessory}</li>
+                  ))}
+                </ul>
+                {workout.conditioning ? <p>{workout.conditioning}</p> : null}
+              </div>
             </div>
           </article>
 
           <article id="sync" className="panel sync-panel">
             <div className="panel-title">
               <Smartphone size={20} aria-hidden="true" />
-              <h2>Fitbit Sync Bridge</h2>
+              <h2>Fitbit Sync Inbox</h2>
             </div>
-            <div className="flow-line">
-              <span>Fitbit</span>
-              <CircleDashed size={18} aria-hidden="true" />
-              <span>Health Connect</span>
-              <CircleDashed size={18} aria-hidden="true" />
-              <span>LifeOS</span>
-              <CircleDashed size={18} aria-hidden="true" />
-              <span>Notion</span>
-            </div>
-            <div className="sync-fields">
-              {syncFields.map((field) => (
-                <span key={field}>{field}</span>
+            <div className="metric-grid">
+              {syncMetrics.map((metric) => (
+                <div className={`metric-card metric-${metric.status.toLowerCase()}`} key={metric.label}>
+                  <span>{metric.label}</span>
+                  <strong>
+                    {metric.value}
+                    {metric.unit ? <small>{metric.unit}</small> : null}
+                  </strong>
+                </div>
               ))}
             </div>
           </article>
 
-          <article id="fasting" className="panel compact-panel">
+          <article className="panel compact-panel">
             <div className="panel-title">
               <Moon size={20} aria-hidden="true" />
-              <h2>Readiness Rules</h2>
+              <h2>Priorities</h2>
             </div>
-            <div className="readiness-list">
-              <p>
-                <span className="dot green"></span>
-                Green: progress normally.
-              </p>
-              <p>
-                <span className="dot yellow"></span>
-                Yellow: train, hold load.
-              </p>
-              <p>
-                <span className="dot red"></span>
-                Red: mobility, Zone 2, rest.
-              </p>
-            </div>
+            <ul className="rule-list">
+              {priorities.map((priority) => (
+                <li key={priority}>
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  {priority}
+                </li>
+              ))}
+            </ul>
           </article>
 
           <article className="panel compact-panel">
@@ -292,20 +243,8 @@ function App() {
               <h2>Notion Backbone</h2>
             </div>
             <p className="muted">
-              Daily Health Log, Fasting Sessions, May Meal Plan, Workout Log, Exercise Library,
-              Fitbit Sync Inbox, and Weekly Reviews stay editable in Notion while the app becomes
-              the daily interface.
-            </p>
-          </article>
-
-          <article className="panel compact-panel">
-            <div className="panel-title">
-              <Activity size={20} aria-hidden="true" />
-              <h2>Next Build Slice</h2>
-            </div>
-            <p className="muted">
-              Wire local state to a typed data layer, then add Notion API sync and an Android
-              Health Connect bridge for automated Fitbit import.
+              Daily Health Log, Fasting Sessions, Meal Plan, Workout Log, Exercise Library, Fitbit
+              Sync Inbox, and Weekly Reviews remain the editable source of truth.
             </p>
           </article>
         </section>
