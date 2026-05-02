@@ -22,7 +22,7 @@ import './App.css'
 import './TodayDashboard.css'
 
 const NOTION_LIFEOS_URL =
-  'https://app.notion.com/p/3524ab8a5f28809facbee1cf935ebad2?v=f248fa787b3e40f8bb2bb98a4457a342&source=copy_link'
+  'https://app.notion.com/p/LifeOS-Command-Center-3544ab8a5f28813d967af856319c8f67?source=copy_link'
 
 function readinessLabel(readiness: string) {
   if (readiness === 'Green') return 'Train as planned'
