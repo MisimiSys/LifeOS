@@ -657,6 +657,10 @@ h3 {
 
 .fasting-phases-panel {
   grid-column: span 2;
+  border-color: rgba(27, 94, 89, 0.18);
+  background:
+    linear-gradient(135deg, rgba(224, 246, 232, 0.92), rgba(255, 247, 229, 0.92)),
+    #f3fbf5;
 }
 
 .phase-stack {
@@ -667,7 +671,8 @@ h3 {
 
 .phase-disclaimer {
   margin-top: 12px;
-  color: #56655f;
+  max-width: 780px;
+  color: #3f5650;
   line-height: 1.55;
 }
 
@@ -679,7 +684,8 @@ h3 {
   border: 1px solid rgba(23, 32, 29, 0.1);
   border-left-width: 5px;
   border-radius: 8px;
-  background: #fffdf8;
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: 0 10px 24px rgba(27, 36, 32, 0.05);
 }
 
 .phase-marker {
@@ -700,10 +706,11 @@ h3 {
 .phase-row small {
   display: block;
   margin-top: 6px;
+  color: #40554f;
 }
 
 .phase-source {
-  color: #7c8983;
+  color: #6a7772;
   font-size: 12px;
 }
 
@@ -718,8 +725,9 @@ h3 {
 }
 
 .phase-active {
-  border-left-color: #1b5e59;
-  background: rgba(27, 94, 89, 0.08);
+  border-color: rgba(186, 122, 35, 0.32);
+  border-left-color: #ba7a23;
+  background: rgba(255, 247, 229, 0.96);
 }
 
 .phase-upcoming {
