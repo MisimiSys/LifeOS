@@ -153,7 +153,13 @@ function App() {
   const isTodaySelected = selectedDate === todayIso()
   const isLiveFastActive = Boolean(activeFastStartIso && isTodaySelected)
   const fasting = useMemo<FastingSession>(() => {
-    if (!activeFastStartIso || !isTodaySelected) return todayPlan.fasting
+    if (!activeFastStartIso || !isTodaySelected) {
+      return {
+        ...todayPlan.fasting,
+        status: 'Eating Window',
+        elapsedHours: 0,
+      }
+    }
 
     const startedAt = new Date(activeFastStartIso)
     const elapsedHours = Math.max(
@@ -175,12 +181,12 @@ function App() {
     }
   }, [activeFastStartIso, clock, isTodaySelected, selectedFastingPlan, todayPlan.fasting])
   const fastingPhases = useMemo(() => getFastingPhasesForElapsed(fasting.elapsedHours), [fasting.elapsedHours])
-  const progress = fastingProgress(fasting)
+  const progress = isLiveFastActive ? fastingProgress(fasting) : 0
   const activeFastingPhase = fastingPhases.find((phase) => phase.status === 'Active') ?? fastingPhases[0]
   const ringTargetHours = Math.min(fasting.targetHours, FASTING_PHASE_MAX_HOURS)
   const ringPhaseMarkers = fastingPhases.filter((phase) => phase.startsAtHour <= ringTargetHours)
-  const phaseMapProgress = Math.min(100, (fasting.elapsedHours / ringTargetHours) * 100)
-  const phasePointerAngle = progress * 3.6
+  const phaseMapProgress = isLiveFastActive ? Math.min(100, (fasting.elapsedHours / ringTargetHours) * 100) : 0
+  const phasePointerAngle = isLiveFastActive ? progress * 3.6 : 0
   const completedDays = weekPreview.filter((day) => day.type === 'Fasting/Healthy' && day.date <= selectedDate).length
   const nutritionRules = [
     {
@@ -434,8 +440,8 @@ function App() {
               <div className="fast-ring-center">
                 <strong className="ring-progress-label">{progress}%</strong>
                 <Flame size={42} aria-hidden="true" />
-                <span>{formatFastHours(fasting.elapsedHours)}</span>
-                <small>{activeFastingPhase.name}</small>
+                <span>{isLiveFastActive ? formatFastHours(fasting.elapsedHours) : 'Eating Window'}</span>
+                <small>{isLiveFastActive ? activeFastingPhase.name : 'Ready to start'}</small>
               </div>
             </div>
             <div className="fast-meta">
@@ -467,9 +473,13 @@ function App() {
               {isLiveFastActive ? fastActionLabel(fasting.status) : 'Start Fast'}
             </button>
             <div className="phase-callout">
-              <span>Current phase</span>
-              <strong>{activeFastingPhase.name}</strong>
-              <p>{activeFastingPhase.essence}</p>
+              <span>{isLiveFastActive ? 'Current phase' : 'Current status'}</span>
+              <strong>{isLiveFastActive ? activeFastingPhase.name : 'Eating Window'}</strong>
+              <p>
+                {isLiveFastActive
+                  ? activeFastingPhase.essence
+                  : 'No fast is running. Choose a plan or press Start Fast when you are ready.'}
+              </p>
             </div>
           </article>
 
