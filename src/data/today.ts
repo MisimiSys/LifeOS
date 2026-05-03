@@ -355,7 +355,7 @@ function mealsForDate(dateIso: string): MealPlanItem[] {
     {
       id: 'main-meal',
       time: '15:30',
-      title: 'Yoruba soup bowl, no swallow default',
+      title: 'Soup bowl, no swallow default',
       role: 'Main meal',
       status: 'Planned',
       carbSignal: 'Low',
@@ -440,7 +440,7 @@ function prioritiesForDate(dateIso: string) {
 
   return [
     'Protect the fasting window.',
-    'Make supper Yoruba, low-carb and satisfying.',
+    'Make supper low-carb and satisfying.',
     'Choose budget protein backup before buying expensive fish.',
     'Keep carbs deliberate, not accidental.',
   ]
@@ -456,7 +456,7 @@ export function getPlanForDate(dateIso: string, now = new Date(), fastingPlan = 
     title: fastingPlan.protocol === '16:8' ? 'No strict fast' : fastingPlan.title,
   } : fastingPlan)
   const dayType: DayType = relax ? 'Relax' : 'Fasting/Healthy'
-  const nutritionMode: NutritionMode = relax ? 'Yoruba relax' : 'Yoruba low-carb'
+  const nutritionMode: NutritionMode = relax ? 'Relax' : 'Low-carb'
 
   return {
     log: {

@@ -647,7 +647,7 @@ function App() {
             <section className="tailored-plan">
               <div>
                 <strong>Tailored Plan</strong>
-                <p>Use your LifeOS rhythm, workout days, and Yoruba meals to choose the fast you can repeat.</p>
+                <p>Use your LifeOS rhythm, workout days, and usual meals to choose the fast you can repeat.</p>
               </div>
               <button type="button" onClick={() => setSelectedFastingPlan(DEFAULT_FASTING_PLAN)}>
                 Check
