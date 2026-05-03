@@ -1,4 +1,5 @@
 const NOTION_VERSION = '2022-06-28'
+const RECIPE_KEY_PROPERTY = process.env.NOTION_RECIPE_KEY_PROPERTY || 'LifeOS Key'
 
 function sendJson(response, statusCode, payload) {
   response.statusCode = statusCode
@@ -44,33 +45,16 @@ function titleProperty(value) {
   }
 }
 
-function selectProperty(value) {
-  return {
-    select: {
-      name: String(value || 'Custom'),
-    },
-  }
-}
-
-function dateProperty(value) {
-  return {
-    date: {
-      start: value || new Date().toISOString().slice(0, 10),
-    },
-  }
-}
-
 function recipeProperties(recipe) {
   return {
     Name: titleProperty(recipe.title),
-    Type: selectProperty(recipe.tag),
-    'Carb Signal': selectProperty(recipe.carbSignal),
+    Type: textProperty(recipe.tag),
+    'Carb Signal': textProperty(recipe.carbSignal),
     Base: textProperty(recipe.base),
     Protein: textProperty(recipe.protein),
     'Vehicle / Note': textProperty(recipe.vehicle),
-    Source: selectProperty(recipe.source),
-    'LifeOS ID': textProperty(recipe.id),
-    'Updated At': dateProperty(recipe.updatedAt),
+    Source: textProperty(recipe.source),
+    [RECIPE_KEY_PROPERTY]: textProperty(recipe.id),
   }
 }
 
@@ -99,7 +83,7 @@ async function findRecipePage(databaseId, recipeId) {
     method: 'POST',
     body: JSON.stringify({
       filter: {
-        property: 'LifeOS ID',
+        property: RECIPE_KEY_PROPERTY,
         rich_text: {
           equals: recipeId,
         },
