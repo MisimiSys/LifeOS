@@ -303,14 +303,22 @@ h3 {
 }
 
 .fast-card-ready .fast-ring {
-  width: 240px;
+  width: min(316px, 100%);
   margin-top: 18px;
-  background:
-    radial-gradient(circle at center, #fffdf8 0 58%, transparent 59%),
-    conic-gradient(from 216deg, transparent 0 28deg, #cddafc 28deg 332deg, transparent 332deg 360deg);
-  box-shadow:
-    inset 0 0 0 15px rgba(205, 218, 252, 0.28),
-    0 22px 44px rgba(82, 103, 214, 0.1);
+  overflow: visible;
+  background: transparent;
+  box-shadow: 0 22px 44px rgba(82, 103, 214, 0.08);
+}
+
+.fast-card-ready .fast-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 18px solid #cddafc;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  opacity: 0.86;
+  pointer-events: none;
 }
 
 .fast-card-ready .phase-pointer,
@@ -444,8 +452,11 @@ h3 {
 }
 
 .fast-card-ready .fast-ring-center {
-  width: 172px;
-  gap: 9px;
+  width: 74%;
+  gap: 14px;
+  margin-top: -34px;
+  background: transparent;
+  box-shadow: none;
   color: #0b2a5b;
 }
 
@@ -500,21 +511,34 @@ h3 {
 .fast-ring-center .prep-start-time {
   display: block;
   color: #071b42;
-  font-size: 28px;
+  font-size: 42px;
   font-weight: 900;
   line-height: 1;
   text-align: center;
 }
 
-.fast-time-control input::-webkit-calendar-picker-indicator {
+.ring-start-action {
+  position: absolute;
+  right: 14%;
+  bottom: 32px;
+  left: 14%;
+  z-index: 3;
+  min-height: 48px;
+  border: 7px solid rgba(205, 218, 252, 0.46);
+  border-radius: 999px;
+  background: #7890f5;
+  color: #ffffff;
   cursor: pointer;
-  opacity: 0.65;
+  font-size: 17px;
+  font-weight: 900;
+  box-shadow: 0 16px 28px rgba(82, 103, 214, 0.2);
 }
 
 .fast-meta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  align-items: start;
 }
 
 .fast-meta p,
@@ -527,6 +551,25 @@ h3 {
   font-weight: 700;
 }
 
+.fast-card-ready .fast-meta p {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.fast-card-ready .fast-meta p:last-child {
+  text-align: right;
+}
+
+.fast-meta-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #8a9691;
+  font-size: 17px;
+  font-weight: 700;
+  text-transform: none;
+}
+
 .fast-meta strong,
 .fast-note strong {
   display: block;
@@ -536,28 +579,80 @@ h3 {
 }
 
 .fast-time-control {
+  position: relative;
+}
+
+.fast-time-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 34px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #071b42;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fast-time-trigger strong {
+  display: block;
+  color: #071b42;
+  font-size: 19px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fast-time-trigger svg {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 8px;
+  border-radius: 50%;
+  background: #edf3ff;
+  color: #5267d6;
+}
+
+.time-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  width: min(138px, 46vw);
+  max-height: 220px;
+  overflow: auto;
   display: grid;
-  gap: 4px;
-}
-
-.fast-time-control span {
-  color: #63726d;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.fast-time-control input {
-  width: 100%;
-  min-width: 0;
-  height: 32px;
+  gap: 2px;
+  padding: 8px;
   border: 1px solid rgba(82, 103, 214, 0.16);
-  border-radius: 8px;
-  padding: 0 6px;
+  border-radius: 14px;
   background: #fffdf8;
-  color: #17201d;
-  font-size: 16px;
+  box-shadow: 0 18px 36px rgba(23, 32, 29, 0.14);
+}
+
+.time-list-end {
+  right: 0;
+  left: auto;
+}
+
+.time-list button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #071b42;
+  cursor: pointer;
+  font-size: 15px;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.time-list button:hover,
+.time-list button.selected {
+  background: #edf3ff;
 }
 
 .fast-note {
@@ -1320,7 +1415,7 @@ h3 {
   }
 
   .fast-card-ready .fast-ring {
-    width: min(230px, 74vw);
+    width: min(330px, 88vw);
   }
 
   .fast-meta {
@@ -1328,13 +1423,21 @@ h3 {
   }
 
   .fast-meta p:last-child {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
-  .fast-time-control input {
-    height: 44px;
-    padding: 0 10px;
+  .fast-time-trigger {
+    gap: 4px;
+  }
+
+  .fast-time-trigger strong {
     font-size: 17px;
+  }
+
+  .fast-time-trigger svg {
+    width: 28px;
+    height: 28px;
+    padding: 7px;
   }
 
   .fast-primary-action {

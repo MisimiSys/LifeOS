@@ -11,6 +11,7 @@ import {
   Gauge,
   HeartPulse,
   Moon,
+  Pencil,
   Plus,
   Smartphone,
   TimerReset,
@@ -41,6 +42,12 @@ const ACTIVE_FAST_STORAGE_KEY = 'lifeos.activeFastStartIso'
 const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
 const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
 const PLANNED_FAST_START_TIME_STORAGE_KEY = 'lifeos.plannedFastStartTime'
+const TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
+  const totalMinutes = index * 5
+  const hours = `${Math.floor(totalMinutes / 60)}`.padStart(2, '0')
+  const minutes = `${totalMinutes % 60}`.padStart(2, '0')
+  return `${hours}:${minutes}`
+})
 
 function readinessLabel(readiness: string) {
   if (readiness === 'Green') return 'Train as planned'
@@ -58,10 +65,6 @@ function formatFastHours(hours: number) {
 
 function formatTargetHours(hours: number) {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
-}
-
-function formatEatingWindow(window: string) {
-  return window.replace('-', '-\n')
 }
 
 function fastActionLabel(status: string) {
@@ -146,6 +149,11 @@ function plannedFastStartInitialValue() {
   return storedTime && isTimeInput(storedTime) ? storedTime : '20:00'
 }
 
+function timeOptionsWithValue(value: string) {
+  if (TIME_OPTIONS.includes(value)) return TIME_OPTIONS
+  return [...TIME_OPTIONS, value].sort()
+}
+
 function clampNumber(value: number, min: number, max: number) {
   if (Number.isNaN(value)) return min
   return Math.min(max, Math.max(min, value))
@@ -193,6 +201,7 @@ function App() {
   const [clock, setClock] = useState(() => new Date())
   const [selectedFastingPlan, setSelectedFastingPlan] = useState(storedFastingPlanInitialValue)
   const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(false)
+  const [editingTimeField, setEditingTimeField] = useState<'start' | 'end' | null>(null)
   const [activeFastStartIso, setActiveFastStartIso] = useState<string | null>(activeFastInitialValue)
   const [plannedFastStartTime, setPlannedFastStartTime] = useState(plannedFastStartInitialValue)
   const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
@@ -230,6 +239,15 @@ function App() {
     selectedFastingPlan.eatingHours > 0
       ? `${formatClockTime(plannedFastEnd)}-${formatClockTime(plannedEatingEnd)}`
       : 'No eating'
+  const plannedFastEndTime = formatTimeInput(plannedFastEnd)
+  const plannedFastStartOptions = useMemo(
+    () => timeOptionsWithValue(plannedFastStartTime),
+    [plannedFastStartTime],
+  )
+  const plannedFastEndOptions = useMemo(
+    () => timeOptionsWithValue(plannedFastEndTime),
+    [plannedFastEndTime],
+  )
   const weekPreview = useMemo(() => getWeekPreview(selectedDate), [selectedDate])
   const { log, meals, workout, syncMetrics, priorities } = todayPlan
   const isTodaySelected = selectedDate === todayIso()
@@ -339,7 +357,10 @@ function App() {
   }
 
   function handlePlannedStartTimeChange(value: string) {
-    if (isTimeInput(value)) setPlannedFastStartTime(value)
+    if (isTimeInput(value)) {
+      setPlannedFastStartTime(value)
+      setEditingTimeField(null)
+    }
   }
 
   function handlePlannedEndTimeChange(value: string) {
@@ -353,6 +374,7 @@ function App() {
 
     const adjustedStart = addHours(intendedEnd, -selectedFastingPlan.fastingHours)
     setPlannedFastStartTime(formatTimeInput(adjustedStart))
+    setEditingTimeField(null)
   }
 
   const commandSignals = [
@@ -597,60 +619,95 @@ function App() {
                   </>
                 )}
               </div>
+              {!isLiveFastActive ? (
+                <button className="ring-start-action" type="button" onClick={handleFastAction}>
+                  Start Fasting
+                </button>
+              ) : null}
             </div>
             <div className="fast-meta">
               <p>
+                <span className="fast-meta-label">Start time</span>
                 {isLiveFastActive ? (
                   <strong>{fasting.startedAt}</strong>
                 ) : (
-                  <label className="fast-time-control">
-                    <span>{formatRelativeDay(plannedFastStart, clock)}</span>
-                    <input
-                      type="time"
-                      value={plannedFastStartTime}
-                      aria-label="Intended fast start time"
-                      onChange={(event) => handlePlannedStartTimeChange(event.target.value)}
-                    />
-                  </label>
+                  <div className="fast-time-control">
+                    <button
+                      type="button"
+                      className="fast-time-trigger"
+                      aria-expanded={editingTimeField === 'start'}
+                      aria-label="Edit intended fast start time"
+                      onClick={() => setEditingTimeField((field) => (field === 'start' ? null : 'start'))}
+                    >
+                      <strong>{formatRelativeDay(plannedFastStart, clock)}, {formatClockTime(plannedFastStart)}</strong>
+                      <Pencil size={14} aria-hidden="true" />
+                    </button>
+                    {editingTimeField === 'start' ? (
+                      <div className="time-list" role="listbox" aria-label="Start time options">
+                        {plannedFastStartOptions.map((time) => (
+                          <button
+                            type="button"
+                            className={time === plannedFastStartTime ? 'selected' : ''}
+                            key={time}
+                            onClick={() => handlePlannedStartTimeChange(time)}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 )}
-                Start time
               </p>
               <p>
+                <span className="fast-meta-label">End time</span>
                 {isLiveFastActive ? (
                   <strong>{fasting.targetEndAt}</strong>
                 ) : (
-                  <label className="fast-time-control">
-                    <span>{formatRelativeDay(plannedFastEnd, clock)}</span>
-                    <input
-                      type="time"
-                      value={formatTimeInput(plannedFastEnd)}
-                      aria-label="Intended fast end time"
-                      onChange={(event) => handlePlannedEndTimeChange(event.target.value)}
-                    />
-                  </label>
+                  <div className="fast-time-control">
+                    <button
+                      type="button"
+                      className="fast-time-trigger"
+                      aria-expanded={editingTimeField === 'end'}
+                      aria-label="Edit intended fast end time"
+                      onClick={() => setEditingTimeField((field) => (field === 'end' ? null : 'end'))}
+                    >
+                      <strong>{formatRelativeDay(plannedFastEnd, clock)}, {formatClockTime(plannedFastEnd)}</strong>
+                      <Pencil size={14} aria-hidden="true" />
+                    </button>
+                    {editingTimeField === 'end' ? (
+                      <div className="time-list time-list-end" role="listbox" aria-label="End time options">
+                        {plannedFastEndOptions.map((time) => (
+                          <button
+                            type="button"
+                            className={time === plannedFastEndTime ? 'selected' : ''}
+                            key={time}
+                            onClick={() => handlePlannedEndTimeChange(time)}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 )}
-                End time
-              </p>
-              <p>
-                <strong>{formatEatingWindow(fasting.eatingWindow)}</strong>
-                Window
               </p>
             </div>
-            <div className="fast-note">
+            {isLiveFastActive ? <div className="fast-note">
               <strong>{selectedFastingPlan.title}</strong>
               <span>
                 {selectedFastingPlan.fastingHours}h fasting
                 {selectedFastingPlan.eatingHours > 0 ? ` · ${selectedFastingPlan.eatingHours}h eating` : ' · no eating'}
               </span>
-            </div>
-            <button
-              className={`fast-primary-action action-${fasting.status.toLowerCase().replace(' ', '-')}`}
-              type="button"
-              onClick={handleFastAction}
-            >
-              {isLiveFastActive ? fastActionLabel(fasting.status) : 'Start Fasting'}
-            </button>
-            <div className="phase-callout">
+            </div> : null}
+            {isLiveFastActive ? <button
+                className={`fast-primary-action action-${fasting.status.toLowerCase().replace(' ', '-')}`}
+                type="button"
+                onClick={handleFastAction}
+              >
+                {fastActionLabel(fasting.status)}
+              </button> : null}
+            {isLiveFastActive ? <div className="phase-callout">
               <span>{isLiveFastActive ? 'Current phase' : 'Next fast'}</span>
               <strong>{isLiveFastActive ? activeFastingPhase.name : `Ready for ${selectedFastingPlan.title}`}</strong>
               <p>
@@ -658,7 +715,7 @@ function App() {
                   ? activeFastingPhase.essence
                   : `Planned start is ${formatRelativeDayTime(plannedFastStart, clock)}. Expected end is ${formatRelativeDayTime(plannedFastEnd, clock)}.`}
               </p>
-            </div>
+            </div> : null}
           </article>
 
           <div className="signal-grid">
