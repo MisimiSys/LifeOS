@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  CircleCheck,
   Database,
   Dumbbell,
   ExternalLink,
@@ -10,6 +11,7 @@ import {
   Gauge,
   HeartPulse,
   Moon,
+  Plus,
   Smartphone,
   TimerReset,
   Utensils,
@@ -36,6 +38,12 @@ function formatFastHours(hours: number) {
   return `${wholeHours}h ${minutes.toString().padStart(2, '0')}m`
 }
 
+function fastActionLabel(status: string) {
+  if (status === 'Eating Window' || status === 'Completed') return 'Break Your Fast'
+  if (status === 'Planned') return 'Start Fast'
+  return 'End Fast'
+}
+
 function App() {
   const [selectedDate, setSelectedDate] = useState(todayIso)
   const [clock, setClock] = useState(() => new Date())
@@ -45,6 +53,8 @@ function App() {
   const progress = fastingProgress(fasting)
   const activeFastingPhase = fastingPhases.find((phase) => phase.status === 'Active') ?? fastingPhases[0]
   const phasePointerAngle = progress * 3.6
+  const visiblePhaseMarkers = fastingPhases.filter((phase) => phase.startsAtHour <= fasting.targetHours)
+  const completedDays = weekPreview.filter((day) => day.type === 'Fasting/Healthy' && day.date <= selectedDate).length
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60 * 1000)
@@ -172,10 +182,34 @@ function App() {
 
         <section id="today" className="hero-grid">
           <article id="fasting" className="fast-card">
-            <div className="card-header">
-              <TimerReset size={22} aria-hidden="true" />
-              <span>Fasting core</span>
+            <div className="fast-card-top">
+              <div className="card-header">
+                <TimerReset size={22} aria-hidden="true" />
+                <span>Fasting core</span>
+              </div>
+              <div className="fast-streak-pill">
+                <CircleCheck size={16} aria-hidden="true" />
+                <strong>{completedDays}</strong>
+              </div>
+              <button className="fast-add-button" type="button" aria-label="Add fasting note">
+                <Plus size={18} aria-hidden="true" />
+              </button>
             </div>
+
+            <div className="fast-week" aria-label="Weekly fasting rhythm">
+              {weekPreview.map((day) => (
+                <button
+                  type="button"
+                  className={day.date === selectedDate ? 'active' : ''}
+                  key={day.date}
+                  onClick={() => setSelectedDate(day.date)}
+                >
+                  <span>{day.day}</span>
+                  <i aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+
             <div
               className="fast-ring"
               style={
@@ -189,8 +223,26 @@ function App() {
               <div className="phase-pointer" aria-hidden="true">
                 <Flame size={17} />
               </div>
-              <span>{formatFastHours(fasting.elapsedHours)}</span>
-              <small>{fasting.status}</small>
+              {visiblePhaseMarkers.map((phase) => (
+                <div
+                  className={`phase-tick phase-tick-${phase.status.toLowerCase()}`}
+                  key={phase.id}
+                  style={
+                    {
+                      '--marker-angle': `${Math.min(360, (phase.startsAtHour / fasting.targetHours) * 360)}deg`,
+                    } as CSSProperties
+                  }
+                  title={phase.name}
+                  aria-hidden="true"
+                >
+                  {phase.status === 'Active' ? <Flame size={13} /> : null}
+                </div>
+              ))}
+              <div className="fast-ring-center">
+                <Flame size={42} aria-hidden="true" />
+                <span>{formatFastHours(fasting.elapsedHours)}</span>
+                <small>{activeFastingPhase.name}</small>
+              </div>
             </div>
             <div className="phase-rail" aria-label="Fasting phase progress">
               {fastingPhases.map((phase) => (
@@ -223,6 +275,9 @@ function App() {
               <strong>{fasting.protocol}</strong>
               <span>{fasting.hydrationTargetLiters}L water target</span>
             </div>
+            <button className={`fast-primary-action action-${fasting.status.toLowerCase().replace(' ', '-')}`} type="button">
+              {fastActionLabel(fasting.status)}
+            </button>
             <div className="phase-callout">
               <span>Current phase</span>
               <strong>{activeFastingPhase.name}</strong>
