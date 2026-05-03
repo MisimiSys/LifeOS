@@ -655,6 +655,54 @@ h3 {
   grid-column: span 2;
 }
 
+.nutrition-command-panel {
+  grid-column: span 2;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.94), rgba(235, 246, 239, 0.94)),
+    #fffdf8;
+}
+
+.nutrition-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.nutrition-rule {
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid rgba(23, 32, 29, 0.1);
+  border-left: 5px solid #228452;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.86);
+}
+
+.nutrition-rule span {
+  color: #63726d;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nutrition-rule strong {
+  display: block;
+  margin-top: 8px;
+  color: #17201d;
+  line-height: 1.25;
+}
+
+.nutrition-rule p {
+  margin-top: 8px;
+  color: #40554f;
+  line-height: 1.45;
+}
+
+.nutrition-avoid {
+  border-left-color: #c0352b;
+  background: rgba(255, 241, 238, 0.88);
+}
+
 .fasting-phases-panel {
   grid-column: span 2;
   border-color: rgba(27, 94, 89, 0.18);
@@ -984,6 +1032,10 @@ h3 {
     grid-column: auto;
   }
 
+  .nutrition-command-panel {
+    grid-column: auto;
+  }
+
   .fasting-phases-panel {
     grid-column: auto;
   }
@@ -1003,6 +1055,7 @@ h3 {
   nav,
   .signal-grid,
   .fast-meta,
+  .nutrition-rule-grid,
   .metric-grid {
     grid-template-columns: 1fr;
   }

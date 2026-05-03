@@ -38,6 +38,8 @@ import './TodayDashboard.css'
 const NOTION_LIFEOS_URL =
   'https://app.notion.com/p/LifeOS-Command-Center-3544ab8a5f28813d967af856319c8f67?source=copy_link'
 const ACTIVE_FAST_STORAGE_KEY = 'lifeos.activeFastStartIso'
+const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
+const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
 
 function readinessLabel(readiness: string) {
   if (readiness === 'Green') return 'Train as planned'
@@ -79,6 +81,41 @@ function activeFastInitialValue() {
   return window.localStorage.getItem(ACTIVE_FAST_STORAGE_KEY)
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  if (Number.isNaN(value)) return min
+  return Math.min(max, Math.max(min, value))
+}
+
+function storedFastingPlanInitialValue() {
+  const storedPlan = window.localStorage.getItem(FASTING_PLAN_STORAGE_KEY)
+  if (!storedPlan) return DEFAULT_FASTING_PLAN
+
+  try {
+    const parsed = JSON.parse(storedPlan) as FastingPlan
+    if (typeof parsed.id === 'string' && typeof parsed.fastingHours === 'number') return parsed
+  } catch {
+    window.localStorage.removeItem(FASTING_PLAN_STORAGE_KEY)
+  }
+
+  return DEFAULT_FASTING_PLAN
+}
+
+function storedCustomPlanInitialValue() {
+  const storedPlan = window.localStorage.getItem(CUSTOM_PLAN_STORAGE_KEY)
+  if (!storedPlan) return { fastingHours: 16, eatingHours: 8 }
+
+  try {
+    const parsed = JSON.parse(storedPlan) as { fastingHours?: number; eatingHours?: number }
+    return {
+      fastingHours: clampNumber(Number(parsed.fastingHours), 1, 96),
+      eatingHours: clampNumber(Number(parsed.eatingHours), 0, 23),
+    }
+  } catch {
+    window.localStorage.removeItem(CUSTOM_PLAN_STORAGE_KEY)
+    return { fastingHours: 16, eatingHours: 8 }
+  }
+}
+
 function planTone(level: FastingPlan['level']) {
   if (level === 'Advanced') return 'warm'
   if (level === 'Custom') return 'pink'
@@ -89,11 +126,12 @@ function planTone(level: FastingPlan['level']) {
 function App() {
   const [selectedDate, setSelectedDate] = useState(todayIso)
   const [clock, setClock] = useState(() => new Date())
-  const [selectedFastingPlan, setSelectedFastingPlan] = useState(DEFAULT_FASTING_PLAN)
+  const [selectedFastingPlan, setSelectedFastingPlan] = useState(storedFastingPlanInitialValue)
   const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(false)
   const [activeFastStartIso, setActiveFastStartIso] = useState<string | null>(activeFastInitialValue)
-  const [customFastingHours, setCustomFastingHours] = useState(16)
-  const [customEatingHours, setCustomEatingHours] = useState(8)
+  const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
+  const [customFastingHours, setCustomFastingHours] = useState(storedCustomPlan.fastingHours)
+  const [customEatingHours, setCustomEatingHours] = useState(storedCustomPlan.eatingHours)
   const customPlan = useMemo<FastingPlan>(
     () => ({
       id: `custom-${customFastingHours}-${customEatingHours}`,
@@ -144,6 +182,28 @@ function App() {
   const phaseMapProgress = Math.min(100, (fasting.elapsedHours / ringTargetHours) * 100)
   const phasePointerAngle = progress * 3.6
   const completedDays = weekPreview.filter((day) => day.type === 'Fasting/Healthy' && day.date <= selectedDate).length
+  const nutritionRules = [
+    {
+      label: 'Plate rule',
+      value: 'Protein + soup/obe + low-carb vehicle',
+      detail: 'Cauliflower rice, cabbage rice or cabbage swallow before real rice/swallow.',
+    },
+    {
+      label: 'Protein fallback',
+      value: 'Eggs, gizzard, chicken laps',
+      detail: 'Use these before expensive croaker or alaran when market price jumps.',
+    },
+    {
+      label: 'Good fat',
+      value: 'Avocado, groundnut, olive oil',
+      detail: 'Small, deliberate fat portions to make fasting supper satisfying.',
+    },
+    {
+      label: 'Avoid',
+      value: 'Prawns, catfish, crayfish',
+      detail: 'Also avoid afang, ogbono, oha, nsala, miyan kuka/taushe and tuwo shinkafa.',
+    },
+  ]
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000)
@@ -158,6 +218,17 @@ function App() {
 
     window.localStorage.removeItem(ACTIVE_FAST_STORAGE_KEY)
   }, [activeFastStartIso])
+
+  useEffect(() => {
+    window.localStorage.setItem(FASTING_PLAN_STORAGE_KEY, JSON.stringify(selectedFastingPlan))
+  }, [selectedFastingPlan])
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      CUSTOM_PLAN_STORAGE_KEY,
+      JSON.stringify({ fastingHours: customFastingHours, eatingHours: customEatingHours }),
+    )
+  }, [customEatingHours, customFastingHours])
 
   function handleFastAction() {
     if (isLiveFastActive) {
@@ -469,6 +540,22 @@ function App() {
             </div>
           </article>
 
+          <article className="panel nutrition-command-panel">
+            <div className="panel-title">
+              <Utensils size={20} aria-hidden="true" />
+              <h2>Nutrition Command</h2>
+            </div>
+            <div className="nutrition-rule-grid">
+              {nutritionRules.map((rule) => (
+                <section className={`nutrition-rule ${rule.label === 'Avoid' ? 'nutrition-avoid' : ''}`} key={rule.label}>
+                  <span>{rule.label}</span>
+                  <strong>{rule.value}</strong>
+                  <p>{rule.detail}</p>
+                </section>
+              ))}
+            </div>
+          </article>
+
           <article id="fasting-phases" className="panel fasting-phases-panel">
             <div className="panel-title">
               <Flame size={20} aria-hidden="true" />
@@ -579,7 +666,7 @@ function App() {
                   max="96"
                   type="number"
                   value={customFastingHours}
-                  onChange={(event) => setCustomFastingHours(Number(event.target.value))}
+                  onChange={(event) => setCustomFastingHours(clampNumber(Number(event.target.value), 1, 96))}
                 />
               </label>
               <label>
@@ -589,7 +676,7 @@ function App() {
                   max="23"
                   type="number"
                   value={customEatingHours}
-                  onChange={(event) => setCustomEatingHours(Number(event.target.value))}
+                  onChange={(event) => setCustomEatingHours(clampNumber(Number(event.target.value), 0, 23))}
                 />
               </label>
               <button
