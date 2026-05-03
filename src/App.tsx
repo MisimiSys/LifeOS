@@ -57,6 +57,10 @@ function formatTargetHours(hours: number) {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1)
 }
 
+function formatEatingWindow(window: string) {
+  return window.replace('-', '-\n')
+}
+
 function fastActionLabel(status: string) {
   if (status === 'Eating Window' || status === 'Completed') return 'Break Your Fast'
   if (status === 'Planned') return 'Start Fast'
@@ -357,6 +361,7 @@ function App() {
                 </a>
               ))}
               <div className="fast-ring-center">
+                <strong className="ring-progress-label">{progress}%</strong>
                 <Flame size={42} aria-hidden="true" />
                 <span>{formatFastHours(fasting.elapsedHours)}</span>
                 <small>{activeFastingPhase.name}</small>
@@ -369,15 +374,11 @@ function App() {
               </p>
               <p>
                 <strong>{fasting.targetEndAt}</strong>
-                Break fast
+                End
               </p>
               <p>
-                <strong>{fasting.eatingWindow}</strong>
+                <strong>{formatEatingWindow(fasting.eatingWindow)}</strong>
                 Window
-              </p>
-              <p>
-                <strong>{progress}%</strong>
-                Complete
               </p>
             </div>
             <div className="fast-note">

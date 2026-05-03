@@ -380,10 +380,16 @@ h3 {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 5px;
+  gap: 4px;
   background: #fffdf8;
   box-shadow: 0 14px 32px rgba(27, 36, 32, 0.08);
   text-align: center;
+}
+
+.ring-progress-label {
+  color: #1b5e59;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .fast-ring-center svg {
@@ -392,7 +398,7 @@ h3 {
 
 .fast-ring-center span {
   display: block;
-  font-size: 23px;
+  font-size: 18px;
   font-weight: 900;
 }
 
@@ -405,7 +411,7 @@ h3 {
 
 .fast-meta {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -422,6 +428,7 @@ h3 {
 .fast-meta strong,
 .fast-note strong {
   display: block;
+  white-space: pre-line;
   color: #17201d;
   font-size: 18px;
 }
