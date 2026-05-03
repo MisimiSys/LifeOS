@@ -13,8 +13,8 @@ export type WorkoutPlan =
   | 'Rest'
 
 export type NutritionMode =
-  | 'Yoruba low-carb'
-  | 'Yoruba relax'
+  | 'Low-carb'
+  | 'Relax'
   | 'General low-carb'
   | 'Seasonal relax'
 
