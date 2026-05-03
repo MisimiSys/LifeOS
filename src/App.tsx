@@ -140,6 +140,11 @@ function formatRelativeDayTime(date: Date, referenceDate: Date) {
   }).format(date)}, ${formatClockTime(date)}`
 }
 
+function formatPickerDate(dateIso: string) {
+  const [, month, day] = dateIso.split('-')
+  return `${month}/${day}`
+}
+
 function activeFastInitialValue() {
   return window.localStorage.getItem(ACTIVE_FAST_STORAGE_KEY)
 }
@@ -152,6 +157,10 @@ function plannedFastStartInitialValue() {
 function timeOptionsWithValue(value: string) {
   if (TIME_OPTIONS.includes(value)) return TIME_OPTIONS
   return [...TIME_OPTIONS, value].sort()
+}
+
+function uniqueSortedDates(dates: string[]) {
+  return Array.from(new Set(dates)).sort()
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -202,6 +211,8 @@ function App() {
   const [selectedFastingPlan, setSelectedFastingPlan] = useState(storedFastingPlanInitialValue)
   const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(false)
   const [editingTimeField, setEditingTimeField] = useState<'start' | 'end' | null>(null)
+  const [timeDraftDate, setTimeDraftDate] = useState(todayIso)
+  const [timeDraftTime, setTimeDraftTime] = useState(plannedFastStartInitialValue)
   const [activeFastStartIso, setActiveFastStartIso] = useState<string | null>(activeFastInitialValue)
   const [plannedFastStartTime, setPlannedFastStartTime] = useState(plannedFastStartInitialValue)
   const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
@@ -239,14 +250,18 @@ function App() {
     selectedFastingPlan.eatingHours > 0
       ? `${formatClockTime(plannedFastEnd)}-${formatClockTime(plannedEatingEnd)}`
       : 'No eating'
-  const plannedFastEndTime = formatTimeInput(plannedFastEnd)
-  const plannedFastStartOptions = useMemo(
-    () => timeOptionsWithValue(plannedFastStartTime),
-    [plannedFastStartTime],
-  )
-  const plannedFastEndOptions = useMemo(
-    () => timeOptionsWithValue(plannedFastEndTime),
-    [plannedFastEndTime],
+  const timeDraftOptions = useMemo(() => timeOptionsWithValue(timeDraftTime), [timeDraftTime])
+  const timeDraftDateOptions = useMemo(
+    () =>
+      uniqueSortedDates([
+        selectedDate,
+        shiftDate(selectedDate, 1),
+        shiftDate(selectedDate, 2),
+        isoFromLocalDate(plannedFastStart),
+        isoFromLocalDate(plannedFastEnd),
+        timeDraftDate,
+      ]),
+    [plannedFastEnd, plannedFastStart, selectedDate, timeDraftDate],
   )
   const weekPreview = useMemo(() => getWeekPreview(selectedDate), [selectedDate])
   const { log, meals, workout, syncMetrics, priorities } = todayPlan
@@ -356,23 +371,26 @@ function App() {
     setActiveFastStartIso(start.toISOString())
   }
 
-  function handlePlannedStartTimeChange(value: string) {
-    if (isTimeInput(value)) {
-      setPlannedFastStartTime(value)
-      setEditingTimeField(null)
-    }
+  function openTimeEditor(field: 'start' | 'end') {
+    const date = field === 'start' ? plannedFastStart : plannedFastEnd
+    setTimeDraftDate(isoFromLocalDate(date))
+    setTimeDraftTime(formatTimeInput(date))
+    setEditingTimeField(field)
   }
 
-  function handlePlannedEndTimeChange(value: string) {
-    if (!isTimeInput(value)) return
+  function saveTimeEditor() {
+    if (!editingTimeField || !isTimeInput(timeDraftTime)) return
 
-    let intendedEnd = dateAtClockTime(selectedDate, value)
-    if (intendedEnd.getTime() <= plannedFastStart.getTime()) {
-      intendedEnd = new Date(intendedEnd.getTime())
-      intendedEnd.setDate(intendedEnd.getDate() + 1)
+    if (editingTimeField === 'start') {
+      setSelectedDate(timeDraftDate)
+      setPlannedFastStartTime(timeDraftTime)
+      setEditingTimeField(null)
+      return
     }
 
+    const intendedEnd = dateAtClockTime(timeDraftDate, timeDraftTime)
     const adjustedStart = addHours(intendedEnd, -selectedFastingPlan.fastingHours)
+    setSelectedDate(isoFromLocalDate(adjustedStart))
     setPlannedFastStartTime(formatTimeInput(adjustedStart))
     setEditingTimeField(null)
   }
@@ -637,25 +655,11 @@ function App() {
                       className="fast-time-trigger"
                       aria-expanded={editingTimeField === 'start'}
                       aria-label="Edit intended fast start time"
-                      onClick={() => setEditingTimeField((field) => (field === 'start' ? null : 'start'))}
+                      onClick={() => openTimeEditor('start')}
                     >
                       <strong>{formatRelativeDay(plannedFastStart, clock)}, {formatClockTime(plannedFastStart)}</strong>
                       <Pencil size={14} aria-hidden="true" />
                     </button>
-                    {editingTimeField === 'start' ? (
-                      <div className="time-list" role="listbox" aria-label="Start time options">
-                        {plannedFastStartOptions.map((time) => (
-                          <button
-                            type="button"
-                            className={time === plannedFastStartTime ? 'selected' : ''}
-                            key={time}
-                            onClick={() => handlePlannedStartTimeChange(time)}
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 )}
               </p>
@@ -670,25 +674,11 @@ function App() {
                       className="fast-time-trigger"
                       aria-expanded={editingTimeField === 'end'}
                       aria-label="Edit intended fast end time"
-                      onClick={() => setEditingTimeField((field) => (field === 'end' ? null : 'end'))}
+                      onClick={() => openTimeEditor('end')}
                     >
                       <strong>{formatRelativeDay(plannedFastEnd, clock)}, {formatClockTime(plannedFastEnd)}</strong>
                       <Pencil size={14} aria-hidden="true" />
                     </button>
-                    {editingTimeField === 'end' ? (
-                      <div className="time-list time-list-end" role="listbox" aria-label="End time options">
-                        {plannedFastEndOptions.map((time) => (
-                          <button
-                            type="button"
-                            className={time === plannedFastEndTime ? 'selected' : ''}
-                            key={time}
-                            onClick={() => handlePlannedEndTimeChange(time)}
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 )}
               </p>
@@ -973,6 +963,51 @@ function App() {
                 </div>
               </section>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {editingTimeField ? (
+        <section className="time-picker-backdrop" aria-label={`Set ${editingTimeField} time`}>
+          <div className="time-picker-sheet">
+            <button
+              className="time-picker-close"
+              type="button"
+              onClick={() => setEditingTimeField(null)}
+              aria-label="Close time picker"
+            >
+              <X size={22} aria-hidden="true" />
+            </button>
+            <h2>Set {editingTimeField} time</h2>
+            <div className="time-picker-grid">
+              <label>
+                Day
+                <select value={timeDraftDate} onChange={(event) => setTimeDraftDate(event.target.value)}>
+                  {timeDraftDateOptions.map((date) => (
+                    <option value={date} key={date}>
+                      {formatRelativeDay(dateAtClockTime(date, timeDraftTime), clock)} · {formatPickerDate(date)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Time
+                <select value={timeDraftTime} onChange={(event) => setTimeDraftTime(event.target.value)}>
+                  {timeDraftOptions.map((time) => (
+                    <option value={time} key={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="time-picker-preview">
+              <span>{formatPickerDate(timeDraftDate)}</span>
+              <strong>{timeDraftTime}</strong>
+            </div>
+            <button className="time-picker-save" type="button" onClick={saveTimeEditor}>
+              Save
+            </button>
           </div>
         </section>
       ) : null}
