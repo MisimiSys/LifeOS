@@ -34,8 +34,8 @@ import {
 } from './data/today'
 import type { FastingSession } from './domain/lifeos'
 import { fastingProgress } from './domain/lifeos'
-import './App.css'
 import './TodayDashboard.css'
+import './App.css'
 
 const NOTION_LIFEOS_URL =
   'https://app.notion.com/p/LifeOS-Command-Center-3544ab8a5f28813d967af856319c8f67?source=copy_link'

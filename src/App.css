@@ -1547,11 +1547,11 @@ h3 {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 14px 12px 96px;
+    padding: 10px 12px 96px;
   }
 
   .topbar {
-    order: 0;
+    order: 1;
     display: grid;
     gap: 10px;
     margin-bottom: 0;
@@ -1567,9 +1567,16 @@ h3 {
   }
 
   .hero-grid {
-    order: 1;
+    display: contents;
+  }
+
+  #fasting {
+    order: 0;
+  }
+
+  .signal-grid {
+    order: 3;
     display: grid;
-    gap: 12px;
     margin-bottom: 0;
   }
 
@@ -1582,12 +1589,12 @@ h3 {
   }
 
   .content-grid {
-    order: 3;
+    order: 4;
+    width: 100%;
     gap: 12px;
   }
 
   nav,
-  .signal-grid,
   .nutrition-rule-grid,
   .recipe-grid,
   .metric-grid {
