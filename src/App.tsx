@@ -1073,8 +1073,8 @@ function App() {
               {meals.map((meal) => (
                 <section className={`meal-row carb-${meal.carbSignal.toLowerCase()}`} key={meal.id}>
                   <div className="meal-time">
-                    <strong>{meal.time}</strong>
-                    <span>{meal.role}</span>
+                    {meal.time ? <strong>{meal.time}</strong> : <span className="meal-time-flex">Set time when ready</span>}
+                    <span>{meal.role}{meals.length === 1 ? ' · OMAD' : ''}</span>
                   </div>
                   <div>
                     <div className="meal-heading">
