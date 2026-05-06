@@ -170,6 +170,23 @@ function uniqueSortedDates(dates: string[]) {
   return Array.from(new Set(dates)).sort()
 }
 
+function consecutiveDayCount(dates: string[]) {
+  const uniqueDates = Array.from(new Set(dates)).sort().reverse()
+  if (uniqueDates.length === 0) return 0
+
+  let streak = 1
+  let anchor = uniqueDates[0]
+
+  for (let index = 1; index < uniqueDates.length; index += 1) {
+    const candidate = uniqueDates[index]
+    if (candidate !== shiftDate(anchor, -1)) break
+    streak += 1
+    anchor = candidate
+  }
+
+  return streak
+}
+
 function clampNumber(value: number, min: number, max: number) {
   if (Number.isNaN(value)) return min
   return Math.min(max, Math.max(min, value))
@@ -765,16 +782,47 @@ function App() {
   }, [fastingHistory, selectedDate])
   const workoutStats = useMemo(() => {
     const completedSessions = workoutLog.filter((entry) => entry.status === 'Done')
+    const skippedSessions = workoutLog.filter((entry) => entry.status === 'Skipped')
     const currentWeekDates = Array.from({ length: 7 }, (_, index) => shiftDate(selectedDate, -index))
     const weeklyCompletions = completedSessions.filter((entry) => currentWeekDates.includes(entry.date)).length
+    const weeklySkips = skippedSessions.filter((entry) => currentWeekDates.includes(entry.date)).length
+    const currentMonthPrefix = selectedDate.slice(0, 7)
+    const monthlyCompletions = completedSessions.filter((entry) => entry.date.startsWith(currentMonthPrefix)).length
     const recentSessions = completedSessions.slice(0, 4)
+    const planBreakdown = Object.entries(
+      completedSessions.reduce(
+        (breakdown, entry) => ({
+          ...breakdown,
+          [entry.plan]: (breakdown[entry.plan] ?? 0) + 1,
+        }),
+        {} as Record<string, number>,
+      ),
+    )
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 4)
 
     return {
       totalSessions: completedSessions.length,
       weeklyCompletions,
+      weeklySkips,
+      monthlyCompletions,
       recentSessions,
+      skippedSessions: skippedSessions.length,
+      planBreakdown,
     }
   }, [selectedDate, workoutLog])
+  const progressSummary = useMemo(
+    () => ({
+      fastingStreak: consecutiveDayCount(fastingHistory.map((session) => session.completedOn)),
+      trainingStreak: consecutiveDayCount(
+        workoutLog.filter((entry) => entry.status === 'Done').map((entry) => entry.date),
+      ),
+      topLiftChanges: Object.values(liftProgress)
+        .sort((left, right) => right.weight - left.weight)
+        .slice(0, 5),
+    }),
+    [fastingHistory, liftProgress, workoutLog],
+  )
   const mainLiftProgress = useMemo(
     () =>
       workout.lifts
@@ -1174,6 +1222,10 @@ function App() {
             <Dumbbell size={18} aria-hidden="true" />
             Fitness
           </a>
+          <a href="#progress">
+            <CircleCheck size={18} aria-hidden="true" />
+            Progress
+          </a>
           <a href="#sync">
             <Smartphone size={18} aria-hidden="true" />
             Sync
@@ -1206,6 +1258,10 @@ function App() {
         <a href="#fitness">
           <Dumbbell size={21} aria-hidden="true" />
           Training
+        </a>
+        <a href="#progress">
+          <CircleCheck size={21} aria-hidden="true" />
+          Track
         </a>
         <a href="#me">
           <HeartPulse size={21} aria-hidden="true" />
@@ -1447,6 +1503,152 @@ function App() {
         </section>
 
         <section className="content-grid">
+          <article id="progress" className="panel progress-panel">
+            <div className="panel-title">
+              <CircleCheck size={20} aria-hidden="true" />
+              <h2>Progress</h2>
+            </div>
+            <div className="progress-grid">
+              <section className="progress-block progress-fasting">
+                <div className="progress-block-heading">
+                  <span>Fasting progress</span>
+                  <strong>{fastingStats.completedSessions} completed fasts</strong>
+                </div>
+                <div className="progress-stat-grid">
+                  <article className="progress-stat-card">
+                    <span>Current streak</span>
+                    <strong>{progressSummary.fastingStreak} days</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>Longest fast</span>
+                    <strong>{formatTargetHours(fastingStats.longestFast)}h</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>Average fast</span>
+                    <strong>{formatTargetHours(fastingStats.averageFast)}h</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>This month</span>
+                    <strong>{fastingStats.monthlySessions}</strong>
+                  </article>
+                </div>
+                <div className="progress-subgrid">
+                  <section className="progress-list-card">
+                    <h3>Recent fasting records</h3>
+                    <div className="progress-list">
+                      {fastingHistory.slice(0, 5).map((entry) => (
+                        <article className="progress-list-row" key={entry.id}>
+                          <div>
+                            <strong>{entry.protocol}</strong>
+                            <p>{relativeDateLabel(entry.completedOn, selectedDate)}</p>
+                          </div>
+                          <span>{formatTargetHours(entry.actualHours)}h</span>
+                        </article>
+                      ))}
+                      {fastingHistory.length === 0 ? <p className="muted">Your completed fasts will stack here.</p> : null}
+                    </div>
+                  </section>
+                  <section className="progress-list-card">
+                    <h3>Protocol mix</h3>
+                    <div className="progress-list">
+                      {fastingStats.protocolBreakdown.map(([protocol, count]) => (
+                        <article className="progress-list-row" key={protocol}>
+                          <div>
+                            <strong>{protocol}</strong>
+                            <p>Completed sessions</p>
+                          </div>
+                          <span>{count}</span>
+                        </article>
+                      ))}
+                      {fastingStats.protocolBreakdown.length === 0 ? (
+                        <p className="muted">Protocol mix will appear once you log a few fasts.</p>
+                      ) : null}
+                    </div>
+                  </section>
+                </div>
+              </section>
+
+              <section className="progress-block progress-training">
+                <div className="progress-block-heading">
+                  <span>Training progress</span>
+                  <strong>{workoutStats.totalSessions} completed sessions</strong>
+                </div>
+                <div className="progress-stat-grid">
+                  <article className="progress-stat-card">
+                    <span>Current streak</span>
+                    <strong>{progressSummary.trainingStreak} days</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>This week</span>
+                    <strong>{workoutStats.weeklyCompletions}</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>This month</span>
+                    <strong>{workoutStats.monthlyCompletions}</strong>
+                  </article>
+                  <article className="progress-stat-card">
+                    <span>Skipped</span>
+                    <strong>{workoutStats.skippedSessions}</strong>
+                  </article>
+                </div>
+                <div className="progress-subgrid">
+                  <section className="progress-list-card">
+                    <h3>Recent workouts</h3>
+                    <div className="progress-list">
+                      {workoutLog.slice(0, 5).map((entry) => (
+                        <article className="progress-list-row" key={entry.id}>
+                          <div>
+                            <strong>{entry.plan}</strong>
+                            <p>
+                              {relativeDateLabel(entry.date, selectedDate)} · {entry.focus}
+                            </p>
+                          </div>
+                          <span>{entry.status}</span>
+                        </article>
+                      ))}
+                      {workoutLog.length === 0 ? <p className="muted">Logged training sessions will show here.</p> : null}
+                    </div>
+                  </section>
+                  <section className="progress-list-card">
+                    <h3>Current working weights</h3>
+                    <div className="progress-list">
+                      {progressSummary.topLiftChanges.map((lift) => (
+                        <article className="progress-list-row" key={lift.label}>
+                          <div>
+                            <strong>{lift.label}</strong>
+                            <p>{lift.failures > 0 ? `${lift.failures} missed session markers` : 'Clean progression run'}</p>
+                          </div>
+                          <span>{lift.weight} lb</span>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="progress-list-card">
+                    <h3>Workout mix</h3>
+                    <div className="progress-list">
+                      {workoutStats.planBreakdown.map(([plan, count]) => (
+                        <article className="progress-list-row" key={plan}>
+                          <div>
+                            <strong>{plan}</strong>
+                            <p>Completed sessions</p>
+                          </div>
+                          <span>{count}</span>
+                        </article>
+                      ))}
+                      {workoutStats.planBreakdown.length === 0 ? (
+                        <p className="muted">Once you log workouts, your plan mix will show up here.</p>
+                      ) : null}
+                    </div>
+                  </section>
+                </div>
+                <p className="progress-note">
+                  Weekly skips this cycle: {workoutStats.weeklySkips}. Use the lift cards in Training to mark wins,
+                  missed reps, and deloads as they happen.
+                </p>
+              </section>
+            </div>
+          </article>
+
           <article id="meals" className="panel meals-panel">
             <div className="panel-title">
               <Apple size={20} aria-hidden="true" />
