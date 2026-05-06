@@ -2240,21 +2240,32 @@ h3 {
 
 .challenge-panel {
   border-left-width: 5px;
+  position: relative;
+  overflow: hidden;
 }
 
 .challenge-mint {
-  border-left-color: #22b083;
-  background: linear-gradient(135deg, rgba(234, 255, 240, 0.96), rgba(255, 253, 248, 0.96));
+  border-left-color: #41d39e;
+  background:
+    radial-gradient(circle at top right, rgba(125, 242, 198, 0.34), transparent 34%),
+    radial-gradient(circle at top left, rgba(164, 245, 211, 0.28), transparent 30%),
+    linear-gradient(160deg, #dffcf0 0%, #f4fff6 42%, #fff7ee 100%);
 }
 
 .challenge-sun {
-  border-left-color: #d59c27;
-  background: linear-gradient(135deg, rgba(255, 248, 220, 0.96), rgba(255, 253, 248, 0.96));
+  border-left-color: #efbf58;
+  background:
+    radial-gradient(circle at top right, rgba(255, 215, 116, 0.28), transparent 36%),
+    radial-gradient(circle at left center, rgba(197, 255, 146, 0.2), transparent 32%),
+    linear-gradient(160deg, #fff8c7 0%, #f4ffd9 48%, #fff7ef 100%);
 }
 
 .challenge-coral {
-  border-left-color: #ef6a7e;
-  background: linear-gradient(135deg, rgba(255, 237, 240, 0.96), rgba(255, 253, 248, 0.96));
+  border-left-color: #ff7f8b;
+  background:
+    radial-gradient(circle at top right, rgba(255, 151, 174, 0.28), transparent 34%),
+    radial-gradient(circle at left center, rgba(139, 244, 204, 0.18), transparent 28%),
+    linear-gradient(160deg, #ffe5ed 0%, #f2fff7 46%, #fff5ef 100%);
 }
 
 .challenge-card-hero span,
@@ -2272,6 +2283,8 @@ h3 {
   display: grid;
   gap: 6px;
   margin-top: 10px;
+  position: relative;
+  z-index: 1;
 }
 
 .challenge-card-hero strong {
@@ -2289,6 +2302,8 @@ h3 {
 .challenge-progress-strip,
 .challenge-progress-card {
   margin-top: 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .challenge-progress-track {
@@ -2321,6 +2336,8 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .challenge-summary-grid section {
@@ -2345,6 +2362,8 @@ h3 {
   gap: 10px;
   margin-top: 14px;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .challenge-primary-button,
@@ -2374,6 +2393,32 @@ h3 {
   align-items: center;
   gap: 6px;
   text-decoration: none;
+  position: relative;
+  z-index: 1;
+}
+
+.challenge-panel::before,
+.challenge-panel::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.challenge-panel::before {
+  top: -58px;
+  right: -32px;
+  width: 142px;
+  height: 142px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.challenge-panel::after {
+  bottom: -54px;
+  left: -26px;
+  width: 126px;
+  height: 126px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .challenge-detail-backdrop {
