@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useRef } from 'react'
 import {
   DEFAULT_FASTING_PLAN,
   FASTING_PHASE_MAX_HOURS,
@@ -35,6 +36,16 @@ import {
 } from './data/today'
 import type { FastingSession, MealPlanItem } from './domain/lifeos'
 import { fastingProgress } from './domain/lifeos'
+import {
+  fetchLifeOsCloudState,
+  hasSupabaseConfig,
+  syncLifeOsCloudState,
+  type CompletedFastRecordRow,
+  type LiftProgressRow,
+  type MealTimelineRow,
+  type RecipeRow,
+  type WorkoutLogRow,
+} from './supabase'
 import './TodayDashboard.css'
 import './App.css'
 
@@ -580,6 +591,143 @@ function storedMealTimelineInitialValue() {
   }
 }
 
+function fastingRecordToRow(record: CompletedFastRecord): CompletedFastRecordRow {
+  return {
+    id: record.id,
+    protocol: record.protocol,
+    planned_hours: record.plannedHours,
+    actual_hours: record.actualHours,
+    started_at_iso: record.startedAtIso,
+    ended_at_iso: record.endedAtIso,
+    completed_on: record.completedOn,
+  }
+}
+
+function fastingRowToRecord(row: CompletedFastRecordRow): CompletedFastRecord {
+  return {
+    id: row.id,
+    protocol: row.protocol as FastingPlan['protocol'],
+    plannedHours: row.planned_hours,
+    actualHours: row.actual_hours,
+    startedAtIso: row.started_at_iso,
+    endedAtIso: row.ended_at_iso,
+    completedOn: row.completed_on,
+  }
+}
+
+function workoutLogToRow(entry: WorkoutLogEntry): WorkoutLogRow {
+  return {
+    id: entry.id,
+    date: entry.date,
+    plan: entry.plan,
+    focus: entry.focus,
+    status: entry.status,
+    completed_at_iso: entry.completedAtIso,
+  }
+}
+
+function workoutRowToEntry(row: WorkoutLogRow): WorkoutLogEntry {
+  return {
+    id: row.id,
+    date: row.date,
+    plan: row.plan,
+    focus: row.focus,
+    status: row.status as WorkoutLogEntry['status'],
+    completedAtIso: row.completed_at_iso,
+  }
+}
+
+function recipeToRow(recipe: Recipe): RecipeRow {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    tag: recipe.tag,
+    carb_signal: recipe.carbSignal,
+    base: recipe.base,
+    protein: recipe.protein,
+    vehicle: recipe.vehicle,
+    source: recipe.source,
+    updated_at: recipe.updatedAt,
+  }
+}
+
+function rowToRecipe(row: RecipeRow): Recipe {
+  return {
+    id: row.id,
+    title: row.title,
+    tag: row.tag,
+    carbSignal: row.carb_signal as RecipeCarbSignal,
+    base: row.base,
+    protein: row.protein,
+    vehicle: row.vehicle,
+    source: row.source as Recipe['source'],
+    updatedAt: row.updated_at,
+  }
+}
+
+function mealTimelineMapToRows(input: Record<string, MealPlanItem[]>): MealTimelineRow[] {
+  return Object.entries(input).flatMap(([date, meals]) =>
+    meals.map((meal) => ({
+      id: meal.id,
+      date,
+      time: meal.time,
+      title: meal.title,
+      role: meal.role,
+      status: meal.status,
+      carb_signal: meal.carbSignal,
+      items: meal.items,
+      budget_backup: meal.budgetBackup ?? null,
+    })),
+  )
+}
+
+function rowsToMealTimelineMap(rows: MealTimelineRow[]) {
+  return rows.reduce(
+    (accumulator, row) => {
+      const meal: MealPlanItem = {
+        id: row.id,
+        time: row.time,
+        title: row.title,
+        role: row.role,
+        status: row.status,
+        carbSignal: row.carb_signal,
+        items: row.items,
+        budgetBackup: row.budget_backup ?? undefined,
+      }
+
+      accumulator[row.date] = [...(accumulator[row.date] ?? []), meal]
+      return accumulator
+    },
+    {} as Record<string, MealPlanItem[]>,
+  )
+}
+
+function liftProgressToRows(input: Record<string, LiftProgressEntry>): LiftProgressRow[] {
+  return Object.values(input).map((entry) => ({
+    label: entry.label,
+    weight: entry.weight,
+    increment: entry.increment,
+    failures: entry.failures,
+    updated_at_iso: entry.updatedAtIso,
+  }))
+}
+
+function rowsToLiftProgressMap(rows: LiftProgressRow[]) {
+  return rows.reduce(
+    (accumulator, row) => ({
+      ...accumulator,
+      [row.label]: {
+        label: row.label,
+        weight: row.weight,
+        increment: row.increment,
+        failures: row.failures,
+        updatedAtIso: row.updated_at_iso,
+      },
+    }),
+    {} as Record<string, LiftProgressEntry>,
+  )
+}
+
 function storedWorkoutLogInitialValue() {
   const storedWorkoutLog = window.localStorage.getItem(WORKOUT_LOG_STORAGE_KEY)
   if (!storedWorkoutLog) return [] as WorkoutLogEntry[]
@@ -724,6 +872,10 @@ function App() {
       ? 'Notion auto-sync is ready.'
       : 'Notion auto-sync needs the private API URL. Local saving is active.',
   )
+  const [cloudSyncMessage, setCloudSyncMessage] = useState(
+    hasSupabaseConfig ? 'Cloud sync ready. Loading shared LifeOS data.' : 'Cloud sync not configured. Using local device storage.',
+  )
+  const hasHydratedCloudState = useRef(false)
   const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
   const [customFastingHours, setCustomFastingHours] = useState(storedCustomPlan.fastingHours)
   const [customEatingHours, setCustomEatingHours] = useState(storedCustomPlan.eatingHours)
@@ -1015,6 +1167,91 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(MEAL_TIMELINE_STORAGE_KEY, JSON.stringify(mealTimelineByDate))
   }, [mealTimelineByDate])
+
+  useEffect(() => {
+    if (!hasSupabaseConfig) {
+      hasHydratedCloudState.current = true
+      return
+    }
+
+    let cancelled = false
+
+    async function hydrateCloudState() {
+      try {
+        const cloudState = await fetchLifeOsCloudState()
+        if (!cloudState || cancelled) return
+
+        if (cloudState.fastingSessions.length > 0) {
+          setFastingHistory(cloudState.fastingSessions.map(fastingRowToRecord))
+        }
+
+        if (cloudState.workoutLogs.length > 0) {
+          setWorkoutLog(cloudState.workoutLogs.map(workoutRowToEntry))
+        }
+
+        if (cloudState.mealTimelines.length > 0) {
+          setMealTimelineByDate(rowsToMealTimelineMap(cloudState.mealTimelines))
+        }
+
+        if (cloudState.recipes.length > 0) {
+          setRecipes(cloudState.recipes.map(rowToRecipe))
+        }
+
+        if (cloudState.liftProgress.length > 0) {
+          setLiftProgress((current) => ({
+            ...current,
+            ...rowsToLiftProgressMap(cloudState.liftProgress),
+          }))
+        }
+
+        setCloudSyncMessage('Cloud sync active. Mobile and desktop can now share the same LifeOS data.')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown cloud sync error'
+        setCloudSyncMessage(`Cloud sync could not load: ${message}`)
+      } finally {
+        if (!cancelled) hasHydratedCloudState.current = true
+      }
+    }
+
+    void hydrateCloudState()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !hasHydratedCloudState.current) return
+
+    let cancelled = false
+
+    async function pushCloudState() {
+      try {
+        await syncLifeOsCloudState({
+          fastingSessions: fastingHistory.map(fastingRecordToRow),
+          workoutLogs: workoutLog.map(workoutLogToRow),
+          mealTimelines: mealTimelineMapToRows(mealTimelineByDate),
+          recipes: recipes.map(recipeToRow),
+          liftProgress: liftProgressToRows(liftProgress),
+        })
+
+        if (!cancelled) {
+          setCloudSyncMessage('Cloud sync active. Latest LifeOS changes are shared across devices.')
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown cloud sync error'
+        if (!cancelled) {
+          setCloudSyncMessage(`Cloud sync failed: ${message}`)
+        }
+      }
+    }
+
+    void pushCloudState()
+
+    return () => {
+      cancelled = true
+    }
+  }, [fastingHistory, workoutLog, mealTimelineByDate, recipes, liftProgress])
 
   function handleFastAction() {
     if (isLiveFastActive && activeFastStartIso) {
@@ -1973,12 +2210,13 @@ function App() {
               <Smartphone size={20} aria-hidden="true" />
               <h2>Fitbit Sync Inbox</h2>
             </div>
+            <p className="sync-roadmap-note">{cloudSyncMessage}</p>
             <div className="sync-summary">
               <section className="sync-summary-card">
                 <span>Bridge status</span>
-                <strong>Bridge needs env check</strong>
+                <strong>{hasSupabaseConfig ? 'Cloud sync connected' : 'Cloud sync not configured'}</strong>
                 <p>
-                  Recipe sync depends on the Vercel API route plus valid Notion secrets and allowed origins.
+                  Shared data now depends on Supabase env keys plus the tables you already created for LifeOS.
                 </p>
               </section>
               <section className="sync-summary-card">
