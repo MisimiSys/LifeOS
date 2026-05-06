@@ -76,6 +76,66 @@ function readinessLabel(readiness: string) {
   return 'Recovery day'
 }
 
+function fastingPlanProfile(plan: FastingPlan): FastingPlanProfile {
+  if (plan.fastingHours <= 14) {
+    return {
+      benefits: ['Easier consistency', 'Gentler appetite reset', 'Better eating-window structure'],
+      suitableFor: ['Beginners building rhythm', 'Busy weekdays', 'People testing fasting without heavy strain'],
+      notSuitableFor: ['People expecting strong results without also cleaning up meal quality'],
+      advice: ['Use this to establish routine first, then tighten later if needed.'],
+    }
+  }
+
+  if (plan.fastingHours <= 16) {
+    return {
+      benefits: ['Sustainable weight control', 'Better fasting consistency', 'Good fit with low-carb suppers', 'Improved meal discipline'],
+      suitableFor: ['Repeatable weekday fasting', 'People balancing training and fasting', 'Busy schedules that still need structure'],
+      notSuitableFor: ['Anyone with medication schedules that require regular meals', 'People with repeated dizziness when fasting'],
+      advice: ['This is the best default LifeOS fast: repeatable, serious, and still training-friendly.'],
+    }
+  }
+
+  if (plan.fastingHours <= 18) {
+    return {
+      benefits: ['Stronger appetite control', 'More deliberate eating window', 'Useful bridge toward deeper fasting', 'Supports lower-carb momentum'],
+      suitableFor: ['Intermediate fasters', 'People comfortable skipping breakfast', 'Those wanting stronger structure than 16:8'],
+      notSuitableFor: ['Beginners who still struggle with hunger swings', 'Heavy lifting days when recovery is poor'],
+      advice: ['Best used when sleep is decent and supper the previous night was satisfying.'],
+    }
+  }
+
+  if (plan.fastingHours <= 20) {
+    return {
+      benefits: ['Tighter calorie control', 'Longer fat-burning window', 'Smaller eating window can simplify decisions'],
+      suitableFor: ['Experienced fasters', 'Aggressive cut phases', 'Weeks when routine is stable'],
+      notSuitableFor: ['Beginners', 'People with low blood pressure symptoms', 'Anyone pushing heavy training without enough recovery'],
+      advice: ['Keep protein high and break the fast with a calm, controlled meal instead of a rebound feast.'],
+    }
+  }
+
+  if (plan.fastingHours <= 24) {
+    return {
+      benefits: ['Extended fasting exposure', 'Useful for advanced appetite control', 'Can sharpen discipline around meal timing'],
+      suitableFor: ['Advanced fasters only', 'Occasional challenge days', 'Controlled low-stress schedules'],
+      notSuitableFor: ['Pregnant or breastfeeding women', 'Underweight individuals', 'People with diabetes or medical conditions unless cleared by a clinician'],
+      advice: ['Treat this as an advanced tool, not your casual everyday default.'],
+    }
+  }
+
+  return {
+    benefits: ['Extended metabolic break from frequent eating', 'Challenge-level fasting discipline', 'Can deepen confidence with longer protocols'],
+    suitableFor: ['Advanced fasters with prior experience', 'Occasional structured challenge blocks', 'Periods with low training load and good recovery'],
+    notSuitableFor: [
+      'Beginners without prior fasting experience',
+      'People with low blood pressure',
+      'People taking medication requiring regular meals',
+      'Pregnant or breastfeeding women',
+      'Anyone with a history of disordered eating',
+    ],
+    advice: ['Use caution, lower training intensity, and have a deliberate refeed plan before starting.'],
+  }
+}
+
 function formatFastHours(hours: number) {
   const wholeHours = Math.floor(hours)
   const totalSeconds = Math.max(0, Math.floor(hours * 60 * 60))
@@ -291,6 +351,13 @@ type LiftProgressEntry = {
 }
 
 type SignalCardTarget = 'day-overview' | 'nutrition' | 'fitness' | 'sync'
+
+type FastingPlanProfile = {
+  benefits: string[]
+  suitableFor: string[]
+  notSuitableFor: string[]
+  advice: string[]
+}
 
 const DEFAULT_LIFT_PROGRESS: Record<string, LiftProgressEntry> = {
   'Back Squat 5x5': { label: 'Back Squat 5x5', weight: 135, increment: 5, failures: 0, updatedAtIso: '2026-05-06T00:00:00.000Z' },
@@ -852,6 +919,7 @@ function App() {
   const [clock, setClock] = useState(() => new Date())
   const [selectedFastingPlan, setSelectedFastingPlan] = useState(storedFastingPlanInitialValue)
   const [isPlanPickerOpen, setIsPlanPickerOpen] = useState(false)
+  const [focusedPlan, setFocusedPlan] = useState<FastingPlan | null>(null)
   const [editingTimeField, setEditingTimeField] = useState<'start' | 'end' | null>(null)
   const [timeDraftDate, setTimeDraftDate] = useState(todayIso)
   const [timeDraftTime, setTimeDraftTime] = useState(plannedFastStartInitialValue)
@@ -2773,7 +2841,14 @@ function App() {
                 <span className="eyebrow">Fasting type</span>
                 <h2>Choose fasting plan</h2>
               </div>
-              <button type="button" onClick={() => setIsPlanPickerOpen(false)} aria-label="Close fasting plan picker">
+              <button
+                type="button"
+                onClick={() => {
+                  setFocusedPlan(null)
+                  setIsPlanPickerOpen(false)
+                }}
+                aria-label="Close fasting plan picker"
+              >
                 <X size={20} aria-hidden="true" />
               </button>
             </header>
@@ -2783,7 +2858,7 @@ function App() {
                 <strong>Tailored Plan</strong>
                 <p>Use your LifeOS rhythm, workout days, and usual meals to choose the fast you can repeat.</p>
               </div>
-              <button type="button" onClick={() => setSelectedFastingPlan(DEFAULT_FASTING_PLAN)}>
+              <button type="button" onClick={() => setFocusedPlan(DEFAULT_FASTING_PLAN)}>
                 Check
               </button>
             </section>
@@ -2817,6 +2892,7 @@ function App() {
                 type="button"
                 onClick={() => {
                   setSelectedFastingPlan(customPlan)
+                  setFocusedPlan(null)
                   setIsPlanPickerOpen(false)
                 }}
               >
@@ -2853,6 +2929,80 @@ function App() {
               </p>
             </section>
 
+            {focusedPlan ? (
+              <section className="plan-detail-card" aria-label={`${focusedPlan.title} fasting plan details`}>
+                <div className="plan-detail-top">
+                  <button type="button" className="plan-detail-back" onClick={() => setFocusedPlan(null)}>
+                    <ChevronRight size={18} aria-hidden="true" />
+                    Back
+                  </button>
+                  <span className={`plan-detail-follow ${selectedFastingPlan.id === focusedPlan.id ? 'is-following' : ''}`}>
+                    {selectedFastingPlan.id === focusedPlan.id ? 'Following' : focusedPlan.level}
+                  </span>
+                </div>
+                <div className="plan-detail-hero">
+                  <h3>{focusedPlan.title}</h3>
+                  <div className="plan-detail-window">
+                    <p>{focusedPlan.fastingHours} h fasting</p>
+                    <p>{focusedPlan.eatingHours > 0 ? `${focusedPlan.eatingHours} h eating` : 'No eating window'}</p>
+                  </div>
+                </div>
+                <section className="plan-detail-section">
+                  <h4>Benefits</h4>
+                  <div className="plan-detail-list">
+                    {fastingPlanProfile(focusedPlan).benefits.map((item) => (
+                      <article className="plan-detail-item" key={`benefit-${item}`}>
+                        <CheckCircle2 size={18} aria-hidden="true" />
+                        <span>{item}</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <section className="plan-detail-section plan-detail-dual">
+                  <div className="plan-detail-box">
+                    <h4>Suitable for</h4>
+                    <ul>
+                      {fastingPlanProfile(focusedPlan).suitableFor.map((item) => (
+                        <li key={`suitable-${item}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="plan-detail-box plan-detail-box-caution">
+                    <h4>Not suitable for</h4>
+                    <ul>
+                      {fastingPlanProfile(focusedPlan).notSuitableFor.map((item) => (
+                        <li key={`not-${item}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+                <section className="plan-detail-section">
+                  <h4>Practical advice</h4>
+                  <div className="plan-detail-list">
+                    {fastingPlanProfile(focusedPlan).advice.map((item) => (
+                      <article className="plan-detail-item" key={`advice-${item}`}>
+                        <Flame size={18} aria-hidden="true" />
+                        <span>{item}</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <div className="plan-detail-actions">
+                  <button
+                    type="button"
+                    className={`plan-detail-apply ${selectedFastingPlan.id === focusedPlan.id ? 'is-following' : ''}`}
+                    onClick={() => {
+                      setSelectedFastingPlan(focusedPlan)
+                      setFocusedPlan(null)
+                      setIsPlanPickerOpen(false)
+                    }}
+                  >
+                    {selectedFastingPlan.id === focusedPlan.id ? 'Following' : 'Start plan'}
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             {(['Hot', 'Basic', 'Intermediate', 'Advanced', 'Custom'] as const).map((level) => (
               <section className="plan-section" key={level}>
                 <div className="plan-section-title">
@@ -2878,8 +3028,7 @@ function App() {
                       }`}
                       key={plan.id}
                       onClick={() => {
-                        setSelectedFastingPlan(plan)
-                        setIsPlanPickerOpen(false)
+                        setFocusedPlan(plan)
                       }}
                     >
                       <span>{plan.title}</span>
