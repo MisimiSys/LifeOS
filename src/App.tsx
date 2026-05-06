@@ -500,6 +500,7 @@ function planTone(level: FastingPlan['level']) {
 function challengeTone(accent: ChallengeDefinition['accent']) {
   if (accent === 'sun') return 'sun'
   if (accent === 'coral') return 'coral'
+  if (accent === 'aqua') return 'aqua'
   return 'mint'
 }
 
@@ -560,7 +561,7 @@ type ChallengeDefinition = {
   targetFasts: number
   minimumFastHours: number
   subtitle: string
-  accent: 'mint' | 'sun' | 'coral'
+  accent: 'mint' | 'sun' | 'coral' | 'aqua'
   benefits: string[]
   reward: string
 }
@@ -625,7 +626,7 @@ const FASTING_CHALLENGES: ChallengeDefinition[] = [
     targetFasts: 10,
     minimumFastHours: 12,
     subtitle: 'Transform consistency in two weeks.',
-    accent: 'sun',
+    accent: 'aqua',
     benefits: ['Noticeable discipline shift', 'Cleaner fasting windows', 'More stable weekday rhythm'],
     reward: '14-Day Rhythm badge',
   },
@@ -3551,8 +3552,15 @@ function App() {
       ) : null}
 
       {focusedChallengeId ? (
-        <section className="challenge-detail-backdrop" aria-label="Fasting challenge details">
-          <div className={`challenge-detail-sheet challenge-${challengeTone(focusedChallenge.accent)}`}>
+        <section
+          className="challenge-detail-backdrop"
+          aria-label="Fasting challenge details"
+          onClick={() => setFocusedChallengeId(null)}
+        >
+          <div
+            className={`challenge-detail-sheet challenge-${challengeTone(focusedChallenge.accent)}`}
+            onClick={(event) => event.stopPropagation()}
+          >
             <header className="challenge-detail-header">
               <div>
                 <span className="eyebrow">Challenge</span>

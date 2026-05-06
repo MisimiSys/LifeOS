@@ -2260,6 +2260,14 @@ h3 {
     linear-gradient(160deg, #fff8c7 0%, #f4ffd9 48%, #fff7ef 100%);
 }
 
+.challenge-aqua {
+  border-left-color: #49b8c8;
+  background:
+    radial-gradient(circle at top right, rgba(120, 230, 242, 0.26), transparent 34%),
+    radial-gradient(circle at left center, rgba(162, 245, 224, 0.22), transparent 30%),
+    linear-gradient(160deg, #e4fbff 0%, #effff8 46%, #fff7ef 100%);
+}
+
 .challenge-coral {
   border-left-color: #ff7f8b;
   background:
