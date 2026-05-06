@@ -46,6 +46,8 @@ const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
 const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
 const PLANNED_FAST_START_TIME_STORAGE_KEY = 'lifeos.plannedFastStartTime'
 const FASTING_HISTORY_STORAGE_KEY = 'lifeos.fastingHistory'
+const WORKOUT_LOG_STORAGE_KEY = 'lifeos.workoutLog'
+const LIFT_PROGRESS_STORAGE_KEY = 'lifeos.liftProgress'
 const RECIPES_STORAGE_KEY = 'lifeos.recipes'
 const TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
   const totalMinutes = index * 5
@@ -239,7 +241,32 @@ type CompletedFastRecord = {
   completedOn: string
 }
 
+type WorkoutLogEntry = {
+  id: string
+  date: string
+  plan: string
+  focus: string
+  status: 'Done' | 'Skipped'
+  completedAtIso: string
+}
+
+type LiftProgressEntry = {
+  label: string
+  weight: number
+  increment: number
+  updatedAtIso: string
+}
+
 type SignalCardTarget = 'day-overview' | 'nutrition' | 'fitness' | 'sync'
+
+const DEFAULT_LIFT_PROGRESS: Record<string, LiftProgressEntry> = {
+  'Back Squat 5x5': { label: 'Back Squat 5x5', weight: 135, increment: 5, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+  'Bench Press 5x5': { label: 'Bench Press 5x5', weight: 95, increment: 5, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+  'Barbell Row 5x5': { label: 'Barbell Row 5x5', weight: 95, increment: 5, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+  'Overhead Press 5x5': { label: 'Overhead Press 5x5', weight: 65, increment: 5, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+  'Deadlift 1x5 or Trap Bar 3x3-5': { label: 'Deadlift 1x5 or Trap Bar 3x3-5', weight: 185, increment: 10, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+  'Trap Bar Deadlift 3x3-5': { label: 'Trap Bar Deadlift 3x3-5', weight: 185, increment: 10, updatedAtIso: '2026-05-06T00:00:00.000Z' },
+}
 
 const recipeLibrary: Recipe[] = [
   {
@@ -411,6 +438,11 @@ function completedFastId() {
   return `fast-${Date.now()}`
 }
 
+function workoutLogId() {
+  if (window.crypto.randomUUID) return window.crypto.randomUUID()
+  return `workout-${Date.now()}`
+}
+
 function recipeToDraft(recipe: Recipe): RecipeDraft {
   return {
     title: recipe.title,
@@ -446,6 +478,59 @@ function storedFastingHistoryInitialValue() {
   } catch {
     window.localStorage.removeItem(FASTING_HISTORY_STORAGE_KEY)
     return []
+  }
+}
+
+function storedWorkoutLogInitialValue() {
+  const storedWorkoutLog = window.localStorage.getItem(WORKOUT_LOG_STORAGE_KEY)
+  if (!storedWorkoutLog) return [] as WorkoutLogEntry[]
+
+  try {
+    const parsed = JSON.parse(storedWorkoutLog) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed.filter((entry): entry is WorkoutLogEntry => {
+      if (!entry || typeof entry !== 'object') return false
+      const workoutEntry = entry as Partial<WorkoutLogEntry>
+      return Boolean(
+        workoutEntry.id &&
+          workoutEntry.date &&
+          workoutEntry.plan &&
+          workoutEntry.focus &&
+          workoutEntry.status &&
+          workoutEntry.completedAtIso,
+      )
+    })
+  } catch {
+    window.localStorage.removeItem(WORKOUT_LOG_STORAGE_KEY)
+    return []
+  }
+}
+
+function isLiftProgressEntry(value: unknown): value is LiftProgressEntry {
+  if (!value || typeof value !== 'object') return false
+  const entry = value as Partial<LiftProgressEntry>
+  return Boolean(entry.label && typeof entry.weight === 'number' && typeof entry.increment === 'number' && entry.updatedAtIso)
+}
+
+function storedLiftProgressInitialValue() {
+  const storedProgress = window.localStorage.getItem(LIFT_PROGRESS_STORAGE_KEY)
+  if (!storedProgress) return DEFAULT_LIFT_PROGRESS
+
+  try {
+    const parsed = JSON.parse(storedProgress) as unknown
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_LIFT_PROGRESS
+
+    return Object.entries(parsed as Record<string, unknown>).reduce(
+      (accumulator, [key, value]) => {
+        if (isLiftProgressEntry(value)) accumulator[key] = value
+        return accumulator
+      },
+      { ...DEFAULT_LIFT_PROGRESS } as Record<string, LiftProgressEntry>,
+    )
+  } catch {
+    window.localStorage.removeItem(LIFT_PROGRESS_STORAGE_KEY)
+    return DEFAULT_LIFT_PROGRESS
   }
 }
 
@@ -502,6 +587,12 @@ function recipesToNotionMarkdown(recipes: Recipe[]) {
   ].join('\n')
 }
 
+function relativeDateLabel(dateIso: string, referenceDateIso: string) {
+  if (dateIso === referenceDateIso) return 'Today'
+  if (dateIso === shiftDate(referenceDateIso, -1)) return 'Yesterday'
+  return dateIso
+}
+
 function App() {
   const [selectedDate, setSelectedDate] = useState(todayIso)
   const [clock, setClock] = useState(() => new Date())
@@ -513,6 +604,8 @@ function App() {
   const [activeFastStartIso, setActiveFastStartIso] = useState<string | null>(activeFastInitialValue)
   const [plannedFastStartTime, setPlannedFastStartTime] = useState(plannedFastStartInitialValue)
   const [fastingHistory, setFastingHistory] = useState(storedFastingHistoryInitialValue)
+  const [workoutLog, setWorkoutLog] = useState(storedWorkoutLogInitialValue)
+  const [liftProgress, setLiftProgress] = useState(storedLiftProgressInitialValue)
   const [recipeFilter, setRecipeFilter] = useState<(typeof RECIPE_FILTERS)[number]>('All')
   const [recipes, setRecipes] = useState(storedRecipesInitialValue)
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null)
@@ -645,6 +738,54 @@ function App() {
       averageFast,
     }
   }, [fastingHistory])
+  const workoutStats = useMemo(() => {
+    const completedSessions = workoutLog.filter((entry) => entry.status === 'Done')
+    const currentWeekDates = Array.from({ length: 7 }, (_, index) => shiftDate(selectedDate, -index))
+    const weeklyCompletions = completedSessions.filter((entry) => currentWeekDates.includes(entry.date)).length
+    const recentSessions = completedSessions.slice(0, 4)
+
+    return {
+      totalSessions: completedSessions.length,
+      weeklyCompletions,
+      recentSessions,
+    }
+  }, [selectedDate, workoutLog])
+  const mainLiftProgress = useMemo(
+    () =>
+      workout.lifts
+        .filter((lift) => Boolean(liftProgress[lift]))
+        .map((lift) => liftProgress[lift]),
+    [liftProgress, workout.lifts],
+  )
+  const loggedWorkoutForSelectedDay = useMemo(
+    () => workoutLog.find((entry) => entry.date === selectedDate && entry.plan === workout.plan),
+    [selectedDate, workout.plan, workoutLog],
+  )
+  const healthConnectSetup = useMemo(
+    () => [
+      {
+        step: 'Phone app ready',
+        status: 'Done',
+        detail: 'Health Connect is already installed on your Android phone.',
+      },
+      {
+        step: 'Fitbit permission handshake',
+        status: 'Next',
+        detail: 'Fitbit must be allowed to write sleep, heart rate, steps, weight, and workouts into Health Connect.',
+      },
+      {
+        step: 'LifeOS capture layer',
+        status: 'Build next',
+        detail: 'LifeOS needs either an Android wrapper or a small companion sync service to read Health Connect data safely.',
+      },
+      {
+        step: 'Daily review flow',
+        status: 'Then',
+        detail: 'Imported signals should land in Sync Inbox first, then feed readiness, fasting review, and workout recovery.',
+      },
+    ],
+    [],
+  )
   const nutritionRules = [
     {
       label: 'Plate rule',
@@ -705,6 +846,14 @@ function App() {
     window.localStorage.setItem(FASTING_HISTORY_STORAGE_KEY, JSON.stringify(fastingHistory))
   }, [fastingHistory])
 
+  useEffect(() => {
+    window.localStorage.setItem(WORKOUT_LOG_STORAGE_KEY, JSON.stringify(workoutLog))
+  }, [workoutLog])
+
+  useEffect(() => {
+    window.localStorage.setItem(LIFT_PROGRESS_STORAGE_KEY, JSON.stringify(liftProgress))
+  }, [liftProgress])
+
   function handleFastAction() {
     if (isLiveFastActive && activeFastStartIso) {
       const now = new Date()
@@ -738,6 +887,47 @@ function App() {
     const element = document.getElementById(targetId)
     if (!element) return
     element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function toggleWorkoutLog(status: WorkoutLogEntry['status'] = 'Done') {
+    if (workout.plan === 'Rest') return
+
+    setWorkoutLog((history) => {
+      const existing = history.find((entry) => entry.date === selectedDate && entry.plan === workout.plan)
+
+      if (existing && status === 'Done') {
+        return history.filter((entry) => entry.id !== existing.id)
+      }
+
+      const nextEntry: WorkoutLogEntry = {
+        id: existing?.id ?? workoutLogId(),
+        date: selectedDate,
+        plan: workout.plan,
+        focus: workout.focus,
+        status,
+        completedAtIso: new Date().toISOString(),
+      }
+
+      return [nextEntry, ...history.filter((entry) => entry.id !== existing?.id)]
+    })
+  }
+
+  function adjustLiftProgress(label: string, nextWeight: number) {
+    setLiftProgress((history) => ({
+      ...history,
+      [label]: {
+        ...(history[label] ?? DEFAULT_LIFT_PROGRESS[label]),
+        label,
+        weight: Math.max(45, nextWeight),
+        updatedAtIso: new Date().toISOString(),
+      },
+    }))
+  }
+
+  function logLiftSuccess(label: string) {
+    const current = liftProgress[label] ?? DEFAULT_LIFT_PROGRESS[label]
+    if (!current) return
+    adjustLiftProgress(label, current.weight + current.increment)
   }
 
   function openTimeEditor(field: 'start' | 'end') {
@@ -1249,6 +1439,71 @@ function App() {
                 {workout.conditioning ? <p>{workout.conditioning}</p> : null}
               </div>
             </div>
+            {mainLiftProgress.length > 0 ? (
+              <div className="lift-progress-grid">
+                {mainLiftProgress.map((lift) => (
+                  <section className="lift-progress-card" key={lift.label}>
+                    <span>{lift.label}</span>
+                    <strong>{lift.weight} lb</strong>
+                    <p>Next jump: +{lift.increment} lb after a solid session.</p>
+                    <div className="lift-progress-actions">
+                      <button type="button" onClick={() => adjustLiftProgress(lift.label, lift.weight - lift.increment)}>
+                        -{lift.increment}
+                      </button>
+                      <button type="button" onClick={() => logLiftSuccess(lift.label)}>
+                        Hit it
+                      </button>
+                      <button type="button" onClick={() => adjustLiftProgress(lift.label, lift.weight + lift.increment)}>
+                        +{lift.increment}
+                      </button>
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+            <div className="workout-action-row">
+              <button type="button" className="workout-primary-button" onClick={() => toggleWorkoutLog('Done')}>
+                {loggedWorkoutForSelectedDay?.status === 'Done' ? 'Undo workout log' : 'Mark workout done'}
+              </button>
+              <button type="button" className="workout-secondary-button" onClick={() => toggleWorkoutLog('Skipped')}>
+                Mark skipped
+              </button>
+            </div>
+            <p className="workout-log-note">
+              {loggedWorkoutForSelectedDay
+                ? `${loggedWorkoutForSelectedDay.status} on ${relativeDateLabel(loggedWorkoutForSelectedDay.date, selectedDate)} for ${loggedWorkoutForSelectedDay.plan}.`
+                : 'No training log saved yet for this day.'}
+            </p>
+          </article>
+
+          <article className="panel compact-panel workout-log-panel">
+            <div className="panel-title">
+              <CircleCheck size={20} aria-hidden="true" />
+              <h2>Workout Log</h2>
+            </div>
+            <div className="workout-log-stats">
+              <section>
+                <span>This week</span>
+                <strong>{workoutStats.weeklyCompletions}</strong>
+              </section>
+              <section>
+                <span>Total logged</span>
+                <strong>{workoutStats.totalSessions}</strong>
+              </section>
+            </div>
+            <div className="workout-log-list">
+              {workoutStats.recentSessions.length > 0 ? (
+                workoutStats.recentSessions.map((entry) => (
+                  <article className="workout-log-entry" key={entry.id}>
+                    <span>{relativeDateLabel(entry.date, selectedDate)}</span>
+                    <strong>{entry.plan}</strong>
+                    <p>{entry.focus}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">Your recent completed training sessions will appear here.</p>
+              )}
+            </div>
           </article>
 
           <article id="nutrition" className="panel nutrition-command-panel">
@@ -1358,6 +1613,37 @@ function App() {
             </div>
           </article>
 
+          <article className="panel compact-panel fasting-records-panel">
+            <div className="panel-title">
+              <TimerReset size={20} aria-hidden="true" />
+              <h2>Fasting Records</h2>
+            </div>
+            <div className="fasting-records-stats">
+              <section>
+                <span>Longest</span>
+                <strong>{formatTargetHours(fastingStats.longestFast)}h</strong>
+              </section>
+              <section>
+                <span>Days logged</span>
+                <strong>{fastingStats.fastingDays}</strong>
+              </section>
+              <section>
+                <span>Completed</span>
+                <strong>{fastingStats.completedSessions}</strong>
+              </section>
+            </div>
+            <div className="fasting-record-list">
+              {fastingHistory.slice(0, 4).map((entry) => (
+                <article className="fasting-record-entry" key={entry.id}>
+                  <span>{relativeDateLabel(entry.completedOn, selectedDate)}</span>
+                  <strong>{entry.protocol}</strong>
+                  <p>Actual {formatTargetHours(entry.actualHours)}h · Planned {formatTargetHours(entry.plannedHours)}h</p>
+                </article>
+              ))}
+              {fastingHistory.length === 0 ? <p className="muted">Completed fasts will start building your record here.</p> : null}
+            </div>
+          </article>
+
           <article id="sync" className="panel sync-panel">
             <div className="panel-title">
               <Smartphone size={20} aria-hidden="true" />
@@ -1387,6 +1673,24 @@ function App() {
                   </strong>
                 </div>
               ))}
+            </div>
+            <div className="health-connect-panel">
+              <div className="health-connect-header">
+                <h3>Health Connect Path</h3>
+                <p>The phone side is partly ready. LifeOS now needs the capture layer that can read Android health data safely.</p>
+              </div>
+              <div className="health-connect-steps">
+                {healthConnectSetup.map((item) => (
+                  <section className={`health-connect-step step-${item.status.toLowerCase().replace(/\s+/g, '-')}`} key={item.step}>
+                    <span>{item.status}</span>
+                    <strong>{item.step}</strong>
+                    <p>{item.detail}</p>
+                  </section>
+                ))}
+              </div>
+              <p className="sync-roadmap-note">
+                Practical integration route: Fitbit writes to Health Connect on Android, then a LifeOS Android wrapper or companion app reads those records and sends daily summaries into this dashboard.
+              </p>
             </div>
           </article>
 
