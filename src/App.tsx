@@ -45,6 +45,7 @@ const ACTIVE_FAST_STORAGE_KEY = 'lifeos.activeFastStartIso'
 const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
 const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
 const PLANNED_FAST_START_TIME_STORAGE_KEY = 'lifeos.plannedFastStartTime'
+const FASTING_HISTORY_STORAGE_KEY = 'lifeos.fastingHistory'
 const RECIPES_STORAGE_KEY = 'lifeos.recipes'
 const TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
   const totalMinutes = index * 5
@@ -228,6 +229,18 @@ type Recipe = {
 
 type RecipeDraft = Omit<Recipe, 'id' | 'source' | 'updatedAt'>
 
+type CompletedFastRecord = {
+  id: string
+  protocol: FastingPlan['protocol']
+  plannedHours: number
+  actualHours: number
+  startedAtIso: string
+  endedAtIso: string
+  completedOn: string
+}
+
+type SignalCardTarget = 'day-overview' | 'nutrition' | 'fitness' | 'sync'
+
 const recipeLibrary: Recipe[] = [
   {
     id: 'efo-riro-protein-bowl',
@@ -393,6 +406,11 @@ function recipeId() {
   return `custom-${Date.now()}`
 }
 
+function completedFastId() {
+  if (window.crypto.randomUUID) return window.crypto.randomUUID()
+  return `fast-${Date.now()}`
+}
+
 function recipeToDraft(recipe: Recipe): RecipeDraft {
   return {
     title: recipe.title,
@@ -402,6 +420,66 @@ function recipeToDraft(recipe: Recipe): RecipeDraft {
     protein: recipe.protein,
     vehicle: recipe.vehicle,
   }
+}
+
+function storedFastingHistoryInitialValue() {
+  const storedHistory = window.localStorage.getItem(FASTING_HISTORY_STORAGE_KEY)
+  if (!storedHistory) return [] as CompletedFastRecord[]
+
+  try {
+    const parsed = JSON.parse(storedHistory) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed.filter((entry): entry is CompletedFastRecord => {
+      if (!entry || typeof entry !== 'object') return false
+      const record = entry as Partial<CompletedFastRecord>
+      return Boolean(
+        record.id &&
+          record.protocol &&
+          typeof record.plannedHours === 'number' &&
+          typeof record.actualHours === 'number' &&
+          record.startedAtIso &&
+          record.endedAtIso &&
+          record.completedOn,
+      )
+    })
+  } catch {
+    window.localStorage.removeItem(FASTING_HISTORY_STORAGE_KEY)
+    return []
+  }
+}
+
+function advisoryContainsAvoid(text: string) {
+  return /(prawn|prawns|catfish|crayfish|afang|ogbono|oha|nsala|miyan kuka|miyan taushe|tuwo shinkafa)/i.test(text)
+}
+
+function buildRecipeAdvisory(input: Pick<RecipeDraft, 'carbSignal' | 'base' | 'protein' | 'vehicle' | 'tag'>) {
+  const advisory: string[] = []
+  const combinedText = `${input.tag} ${input.base} ${input.protein} ${input.vehicle}`.toLowerCase()
+
+  if (advisoryContainsAvoid(combinedText)) {
+    advisory.push('This recipe mentions an avoid item. Swap it before using it in your plan.')
+  }
+
+  if (!input.protein.trim()) {
+    advisory.push('Add a clear protein anchor so the meal does not become carb-led.')
+  } else if (/(alaran|croaker|fish|mackerel)/i.test(input.protein)) {
+    advisory.push('If fish price jumps, use eggs, gizzard, or chicken laps as the budget fallback.')
+  }
+
+  if (input.carbSignal === 'Low' && !/(cauliflower|cabbage|eggplant|no swallow)/i.test(combinedText)) {
+    advisory.push('Keep this low-carb with cauliflower rice, cabbage rice, eggplant swallow, or no swallow.')
+  }
+
+  if (input.carbSignal === 'Medium') {
+    advisory.push('Measure the carb portion deliberately so quinoa, lentils, or beans stay controlled.')
+  }
+
+  if (input.carbSignal === 'Relax') {
+    advisory.push('Best on relax days. Lead with protein first so the meal stays steady.')
+  }
+
+  return advisory.slice(0, 2)
 }
 
 function recipesToNotionMarkdown(recipes: Recipe[]) {
@@ -434,6 +512,7 @@ function App() {
   const [timeDraftTime, setTimeDraftTime] = useState(plannedFastStartInitialValue)
   const [activeFastStartIso, setActiveFastStartIso] = useState<string | null>(activeFastInitialValue)
   const [plannedFastStartTime, setPlannedFastStartTime] = useState(plannedFastStartInitialValue)
+  const [fastingHistory, setFastingHistory] = useState(storedFastingHistoryInitialValue)
   const [recipeFilter, setRecipeFilter] = useState<(typeof RECIPE_FILTERS)[number]>('All')
   const [recipes, setRecipes] = useState(storedRecipesInitialValue)
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null)
@@ -549,6 +628,25 @@ function App() {
     () => recipes.filter((recipe) => recipeFilter === 'All' || recipe.carbSignal === recipeFilter),
     [recipeFilter, recipes],
   )
+  const recipeAdvisory = useMemo(() => buildRecipeAdvisory(recipeDraft), [recipeDraft])
+  const fastingStats = useMemo(() => {
+    const completedSessions = fastingHistory.length
+    const longestFast = fastingHistory.reduce((max, session) => Math.max(max, session.actualHours), 0)
+    const fastingDays = new Set(fastingHistory.map((session) => session.completedOn)).size
+    const averageFast =
+      completedSessions > 0
+        ? fastingHistory.reduce((sum, session) => sum + session.actualHours, 0) / completedSessions
+        : 0
+
+    return {
+      completedSessions,
+      fastingDays,
+      longestFast,
+      averageFast,
+    }
+  }, [fastingHistory])
+  const localPreviewBlocksSync =
+    typeof window !== 'undefined' && /^(http:\/\/127\.0\.0\.1|http:\/\/localhost)/i.test(window.location.origin)
   const nutritionRules = [
     {
       label: 'Plate rule',
@@ -605,18 +703,43 @@ function App() {
     window.localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(recipes))
   }, [recipes])
 
+  useEffect(() => {
+    window.localStorage.setItem(FASTING_HISTORY_STORAGE_KEY, JSON.stringify(fastingHistory))
+  }, [fastingHistory])
+
   function handleFastAction() {
-    if (isLiveFastActive) {
+    if (isLiveFastActive && activeFastStartIso) {
+      const now = new Date()
+      const startedAt = new Date(activeFastStartIso)
+      const actualHours = Math.max(0, (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60))
+
+      setFastingHistory((history) => [
+        {
+          id: completedFastId(),
+          protocol: selectedFastingPlan.protocol,
+          plannedHours: selectedFastingPlan.fastingHours,
+          actualHours: Number(actualHours.toFixed(2)),
+          startedAtIso: startedAt.toISOString(),
+          endedAtIso: now.toISOString(),
+          completedOn: isoFromLocalDate(now),
+        },
+        ...history,
+      ])
       setActiveFastStartIso(null)
-      setClock(new Date())
+      setClock(now)
       return
     }
 
     const now = new Date()
-    const start = dateAtClockTime(todayIso(), plannedFastStartTime)
     setSelectedDate(todayIso())
     setClock(now)
-    setActiveFastStartIso(start.toISOString())
+    setActiveFastStartIso(now.toISOString())
+  }
+
+  function jumpToSection(targetId: SignalCardTarget) {
+    const element = document.getElementById(targetId)
+    if (!element) return
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function openTimeEditor(field: 'start' | 'end') {
@@ -654,6 +777,11 @@ function App() {
       return
     }
 
+    if (localPreviewBlocksSync) {
+      setRecipeSyncMessage('Local preview is blocked by Vercel CORS. Use the published site or allow localhost in the sync bridge.')
+      return
+    }
+
     setIsRecipeSyncing(true)
     setRecipeSyncMessage('Syncing recipes to Notion...')
 
@@ -667,12 +795,14 @@ function App() {
       })
 
       if (!response.ok) {
-        throw new Error(`Notion sync failed with ${response.status}`)
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null
+        throw new Error(payload?.error || `Notion sync failed with ${response.status}`)
       }
 
       setRecipeSyncMessage(`Synced ${nextRecipes.length} recipes to Notion.`)
-    } catch {
-      setRecipeSyncMessage('Saved locally, but Notion sync failed. Check the private API bridge.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown sync error'
+      setRecipeSyncMessage(`Saved locally, but Notion sync failed: ${message}`)
     } finally {
       setIsRecipeSyncing(false)
     }
@@ -717,7 +847,11 @@ function App() {
     })()
 
     setRecipes(nextRecipes)
-    setRecipeSyncMessage('Saved locally. Syncing when a private Notion bridge is configured.')
+    setRecipeSyncMessage(
+      localPreviewBlocksSync
+        ? 'Saved locally. Recipe sync needs the published site or a localhost-safe bridge.'
+        : 'Saved locally. Sending recipe to Notion.',
+    )
     setEditingRecipeId(null)
     void syncRecipesToNotion(nextRecipes)
   }
@@ -738,6 +872,7 @@ function App() {
       value: log.dayType,
       detail: `${log.day}, ${log.date}`,
       trend: log.dayType === 'Relax' ? 'watch' : 'good',
+      targetId: 'day-overview' as const,
     },
     {
       role: 'nutrition',
@@ -745,6 +880,7 @@ function App() {
       value: log.nutritionMode,
       detail: `${meals.length} planned eating decisions`,
       trend: 'good',
+      targetId: 'nutrition' as const,
     },
     {
       role: 'training',
@@ -752,6 +888,7 @@ function App() {
       value: workout.plan,
       detail: workout.focus,
       trend: workout.status === 'Optional' ? 'neutral' : 'good',
+      targetId: 'fitness' as const,
     },
     {
       role: 'sync',
@@ -759,6 +896,7 @@ function App() {
       value: 'Health Connect',
       detail: `${syncMetrics.length} Fitbit signals staged`,
       trend: 'watch',
+      targetId: 'sync' as const,
     },
   ] as const
 
@@ -847,7 +985,7 @@ function App() {
           </div>
         </header>
 
-        <section className="date-console" aria-label="Plan date controls">
+        <section id="day-overview" className="date-console" aria-label="Plan date controls">
           <div>
             <span className="eyebrow">{log.day}</span>
             <strong>{log.date}</strong>
@@ -1054,11 +1192,16 @@ function App() {
 
           <div className="signal-grid">
             {commandSignals.map((signal) => (
-              <article className={`signal-card signal-${signal.trend} signal-role-${signal.role}`} key={signal.label}>
+              <button
+                className={`signal-card signal-card-button signal-${signal.trend} signal-role-${signal.role}`}
+                key={signal.label}
+                type="button"
+                onClick={() => jumpToSection(signal.targetId)}
+              >
                 <span>{signal.label}</span>
                 <strong>{signal.value}</strong>
                 <p>{signal.detail}</p>
-              </article>
+              </button>
             ))}
           </div>
         </section>
@@ -1119,7 +1262,7 @@ function App() {
             </div>
           </article>
 
-          <article className="panel nutrition-command-panel">
+          <article id="nutrition" className="panel nutrition-command-panel">
             <div className="panel-title">
               <Utensils size={20} aria-hidden="true" />
               <h2>Nutrition Command</h2>
@@ -1143,6 +1286,11 @@ function App() {
             <p className="recipes-intro">
               Low-carb meals first, medium-carb meals controlled, relax foods clearly marked.
             </p>
+            <p className="recipe-sync-note">
+              {localPreviewBlocksSync
+                ? 'Notion sync is blocked on local preview because the Vercel bridge only allows https://misimisys.github.io right now.'
+                : recipeSyncMessage}
+            </p>
             <div className="recipe-action-row">
               <button type="button" onClick={() => openRecipeEditor()}>
                 <Plus size={16} aria-hidden="true" />
@@ -1157,7 +1305,6 @@ function App() {
                 Copy Notion update
               </button>
             </div>
-            <p className="recipe-sync-note">{recipeSyncMessage}</p>
             <div className="recipe-filter-row" aria-label="Recipe filter">
               {RECIPE_FILTERS.map((filter) => (
                 <button
@@ -1182,6 +1329,13 @@ function App() {
                   <p>{recipe.base}</p>
                   <small>{recipe.protein}</small>
                   <small>{recipe.vehicle}</small>
+                  <div className="recipe-advisory-list">
+                    {buildRecipeAdvisory(recipe).map((advisory) => (
+                      <small className="recipe-advisory" key={advisory}>
+                        {advisory}
+                      </small>
+                    ))}
+                  </div>
                   <button className="recipe-edit-button" type="button" onClick={() => openRecipeEditor(recipe)}>
                     <Pencil size={14} aria-hidden="true" />
                     Edit
@@ -1223,6 +1377,22 @@ function App() {
             <div className="panel-title">
               <Smartphone size={20} aria-hidden="true" />
               <h2>Fitbit Sync Inbox</h2>
+            </div>
+            <div className="sync-summary">
+              <section className="sync-summary-card">
+                <span>Bridge status</span>
+                <strong>{localPreviewBlocksSync ? 'Local preview blocked' : 'Bridge ready'}</strong>
+                <p>
+                  {localPreviewBlocksSync
+                    ? 'The deployed bridge only allows the published site, not 127.0.0.1.'
+                    : 'Fitbit to Health Connect can stage here once the import bridge is built.'}
+                </p>
+              </section>
+              <section className="sync-summary-card">
+                <span>Recipe sync</span>
+                <strong>{localPreviewBlocksSync ? 'Use published site' : 'Ready to test'}</strong>
+                <p>Current target is the LifeOS Recipes Notion database through the Vercel API bridge.</p>
+              </section>
             </div>
             <div className="metric-grid">
               {syncMetrics.map((metric) => (
@@ -1346,6 +1516,17 @@ function App() {
                   placeholder="Cauliflower rice, cabbage swallow, relax day..."
                 />
               </label>
+              <section className="recipe-editor-advisory">
+                <span className="eyebrow">Advisory</span>
+                <h3>How LifeOS will treat this recipe</h3>
+                <ul className="recipe-editor-advisory-list">
+                  {recipeAdvisory.length > 0 ? (
+                    recipeAdvisory.map((advisory) => <li key={advisory}>{advisory}</li>)
+                  ) : (
+                    <li>This recipe fits the current rules cleanly.</li>
+                  )}
+                </ul>
+              </section>
             </div>
 
             <div className="recipe-editor-actions">
@@ -1415,6 +1596,35 @@ function App() {
               >
                 Apply
               </button>
+            </section>
+
+            <section className="fasting-stats-panel">
+              <div className="plan-section-title">
+                <h3>Advanced fasting records</h3>
+                <p>Saved in this browser for now, until we wire a proper backend log.</p>
+              </div>
+              <div className="fasting-stats-grid">
+                <article className="fasting-stat-card">
+                  <span>Current plan</span>
+                  <strong>{selectedFastingPlan.fastingHours}h</strong>
+                </article>
+                <article className="fasting-stat-card">
+                  <span>Longest fast</span>
+                  <strong>{formatTargetHours(fastingStats.longestFast)}h</strong>
+                </article>
+                <article className="fasting-stat-card">
+                  <span>Fasting days</span>
+                  <strong>{fastingStats.fastingDays}</strong>
+                </article>
+                <article className="fasting-stat-card">
+                  <span>Completed fasts</span>
+                  <strong>{fastingStats.completedSessions}</strong>
+                </article>
+              </div>
+              <p className="fasting-stats-note">
+                Average completed fast: {formatTargetHours(fastingStats.averageFast)}h. Current fast state,
+                selected plan, custom plan, recipes, and completed fast records are being saved in local browser storage.
+              </p>
             </section>
 
             {(['Hot', 'Basic', 'Intermediate', 'Advanced', 'Custom'] as const).map((level) => (

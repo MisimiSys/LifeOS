@@ -862,6 +862,28 @@ h3 {
   border-left-width: 5px;
 }
 
+.signal-card-button {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.signal-card-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 48px rgba(27, 36, 32, 0.1);
+}
+
+.signal-card-button:focus-visible {
+  outline: 3px solid rgba(82, 103, 214, 0.22);
+  outline-offset: 2px;
+}
+
 .signal-card strong {
   display: block;
   margin: 12px 0 8px;
@@ -1266,6 +1288,21 @@ h3 {
   display: block;
 }
 
+.recipe-advisory-list {
+  display: grid;
+  gap: 6px;
+}
+
+.recipe-advisory {
+  padding: 8px 10px;
+  border: 1px solid rgba(23, 32, 29, 0.08);
+  border-radius: 8px;
+  background: rgba(238, 248, 244, 0.9);
+  color: #335047;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .recipe-edit-button {
   justify-self: start;
   min-height: 34px;
@@ -1381,6 +1418,41 @@ h3 {
 
 .phase-upcoming {
   border-left-color: #aab6ae;
+}
+
+.sync-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.sync-summary-card,
+.fasting-stat-card,
+.recipe-editor-advisory {
+  padding: 14px;
+  border: 1px solid rgba(23, 32, 29, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.88);
+}
+
+.sync-summary-card {
+  border-left: 5px solid #ba7a23;
+  background: rgba(255, 249, 238, 0.92);
+}
+
+.sync-summary-card strong,
+.fasting-stat-card strong {
+  display: block;
+  margin: 8px 0 6px;
+  color: #17201d;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.sync-summary-card p {
+  color: #56655f;
+  line-height: 1.5;
 }
 
 .metric-grid {
@@ -1506,6 +1578,30 @@ h3 {
 
 .recipe-editor-wide {
   grid-column: 1 / -1;
+}
+
+.recipe-editor-advisory {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  border-left: 5px solid #1b5e59;
+  background: rgba(238, 248, 244, 0.92);
+}
+
+.recipe-editor-advisory h3 {
+  color: #17201d;
+}
+
+.recipe-editor-advisory-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #335047;
+}
+
+.recipe-editor-advisory-list li {
+  line-height: 1.5;
 }
 
 .recipe-editor-actions {
@@ -1653,6 +1749,31 @@ h3 {
   background: #fffdf8;
   color: #17201d;
   font-weight: 900;
+}
+
+.fasting-stats-panel {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(241, 248, 255, 0.95), rgba(255, 253, 248, 0.98));
+}
+
+.fasting-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.fasting-stat-card {
+  border-left: 5px solid #5267d6;
+  background: rgba(244, 247, 255, 0.92);
+}
+
+.fasting-stats-note {
+  margin-top: 12px;
+  color: #4c5e6f;
+  line-height: 1.55;
 }
 
 .plan-section {
@@ -1896,7 +2017,9 @@ h3 {
   .recipe-filter-row,
   .recipe-editor-grid,
   .recipe-grid,
-  .metric-grid {
+  .metric-grid,
+  .sync-summary,
+  .fasting-stats-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2031,6 +2154,10 @@ h3 {
 
   .signal-card {
     min-height: 118px;
+  }
+
+  .signal-card-button:hover {
+    transform: none;
   }
 
   .plan-picker-backdrop {
