@@ -26,8 +26,7 @@ export default async function handler(request, response) {
     response.end()
   } catch (error) {
     sendJson(response, 500, {
-      error: error instanceof Error ? error.message : 'Could not start Fitbit connection',
+      error: error instanceof Error ? error.message : 'Could not start Google Health connection',
     })
   }
 }
-

@@ -1,4 +1,4 @@
-import { getStoredFitbitToken, latestFitbitMetrics, sendJson, setCors } from './_shared.js'
+import { getStoredHealthToken, latestHealthMetrics, sendJson, setCors } from './_shared.js'
 
 export default async function handler(request, response) {
   setCors(request, response)
@@ -15,7 +15,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const [token, metrics] = await Promise.all([getStoredFitbitToken().catch(() => null), latestFitbitMetrics().catch(() => null)])
+    const [token, metrics] = await Promise.all([getStoredHealthToken().catch(() => null), latestHealthMetrics().catch(() => null)])
 
     sendJson(response, 200, {
       ok: true,
@@ -25,8 +25,7 @@ export default async function handler(request, response) {
     })
   } catch (error) {
     sendJson(response, 500, {
-      error: error instanceof Error ? error.message : 'Could not load Fitbit status',
+      error: error instanceof Error ? error.message : 'Could not load Google Health status',
     })
   }
 }
-

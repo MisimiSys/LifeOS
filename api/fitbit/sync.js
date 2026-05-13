@@ -1,4 +1,4 @@
-import { fetchTodayFitbitMetrics, sendJson, setCors, upsertDailyMetrics } from './_shared.js'
+import { fetchTodayHealthMetrics, sendJson, setCors, upsertDailyMetrics } from './_shared.js'
 
 export default async function handler(request, response) {
   setCors(request, response)
@@ -15,13 +15,12 @@ export default async function handler(request, response) {
   }
 
   try {
-    const metrics = await fetchTodayFitbitMetrics()
-    await upsertDailyMetrics(metrics)
-    sendJson(response, 200, { ok: true, metrics })
+      const metrics = await fetchTodayHealthMetrics()
+      await upsertDailyMetrics(metrics)
+      sendJson(response, 200, { ok: true, metrics })
   } catch (error) {
     sendJson(response, 500, {
-      error: error instanceof Error ? error.message : 'Could not sync Fitbit data',
+      error: error instanceof Error ? error.message : 'Could not sync Google Health data',
     })
   }
 }
-

@@ -57,12 +57,15 @@ const NOTION_LIFEOS_URL =
   'https://app.notion.com/p/LifeOS-Command-Center-3544ab8a5f28813d967af856319c8f67?source=copy_link'
 const LEARNING_PORTAL_URL = 'https://misimisys.github.io/portal/'
 const DEFAULT_NOTION_SYNC_ENDPOINT = 'https://life-os-lac-pi.vercel.app/api/recipes/upsert'
-const DEFAULT_FITBIT_BRIDGE_BASE = 'https://life-os-lac-pi.vercel.app'
+const DEFAULT_HEALTH_BRIDGE_BASE = 'https://life-os-lac-pi.vercel.app'
 const NOTION_SYNC_ENDPOINT = import.meta.env.VITE_LIFEOS_SYNC_API_URL ?? DEFAULT_NOTION_SYNC_ENDPOINT
-const FITBIT_BRIDGE_BASE = import.meta.env.VITE_LIFEOS_FITBIT_API_BASE ?? DEFAULT_FITBIT_BRIDGE_BASE
-const FITBIT_STATUS_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/status`
-const FITBIT_CONNECT_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/connect`
-const FITBIT_SYNC_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/sync`
+const HEALTH_BRIDGE_BASE =
+  import.meta.env.VITE_LIFEOS_HEALTH_API_BASE ??
+  import.meta.env.VITE_LIFEOS_FITBIT_API_BASE ??
+  DEFAULT_HEALTH_BRIDGE_BASE
+const HEALTH_STATUS_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/status`
+const HEALTH_CONNECT_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/connect`
+const HEALTH_SYNC_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/sync`
 const ACTIVE_FAST_STORAGE_KEY = 'lifeos.activeFastStartIso'
 const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
 const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
@@ -1862,10 +1865,10 @@ function App() {
 
   const loadFitbitBridgeStatus = useCallback(async () => {
     try {
-      const response = await fetch(FITBIT_STATUS_ENDPOINT, { method: 'GET' })
+      const response = await fetch(HEALTH_STATUS_ENDPOINT, { method: 'GET' })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || 'Could not load Fitbit bridge status')
+        throw new Error(payload.error || 'Could not load Google Health bridge status')
       }
 
       setFitbitBridge({
@@ -1876,10 +1879,10 @@ function App() {
       setFitbitMessage(
         payload.connected
           ? formatFitbitSyncStamp(payload.lastSyncedAt ?? payload.latestMetrics?.synced_at ?? null)
-          : 'Fitbit bridge ready to connect. This will feed steps, sleep, heart rate, and weight into the dashboard.',
+          : 'Google Health bridge ready to connect. This will feed Fitbit and other supported health signals into the dashboard.',
       )
     } catch (error) {
-      setFitbitMessage(error instanceof Error ? error.message : 'Could not load Fitbit bridge status.')
+      setFitbitMessage(error instanceof Error ? error.message : 'Could not load Google Health bridge status.')
     }
   }, [])
 
@@ -1892,12 +1895,12 @@ function App() {
     const fitbitState = params.get('fitbit')
     const fitbitError = params.get('message')
     const callbackLoadId = window.setTimeout(() => {
-      if (fitbitState === 'connected') {
-        setFitbitMessage('Fitbit connected. Pulling the latest dashboard metrics now.')
+    if (fitbitState === 'connected') {
+        setFitbitMessage('Google Health connected. Pulling the latest dashboard metrics now.')
         window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`)
         void loadFitbitBridgeStatus()
       } else if (fitbitState === 'error') {
-        setFitbitMessage(fitbitError ?? 'Fitbit connection did not complete cleanly.')
+        setFitbitMessage(fitbitError ?? 'Google Health connection did not complete cleanly.')
         window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`)
       }
     }, 0)
@@ -1910,13 +1913,13 @@ function App() {
   async function syncFitbitBridgeNow() {
     setIsFitbitSyncing(true)
     try {
-      const response = await fetch(FITBIT_SYNC_ENDPOINT, {
+      const response = await fetch(HEALTH_SYNC_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || 'Fitbit sync failed')
+        throw new Error(payload.error || 'Google Health sync failed')
       }
 
       setFitbitBridge({
@@ -1926,14 +1929,14 @@ function App() {
       })
       setFitbitMessage(formatFitbitSyncStamp(payload.metrics?.synced_at ?? new Date().toISOString()))
     } catch (error) {
-      setFitbitMessage(error instanceof Error ? error.message : 'Fitbit sync failed.')
+      setFitbitMessage(error instanceof Error ? error.message : 'Google Health sync failed.')
     } finally {
       setIsFitbitSyncing(false)
     }
   }
 
   function connectFitbitBridge() {
-    window.location.href = FITBIT_CONNECT_ENDPOINT
+    window.location.href = HEALTH_CONNECT_ENDPOINT
   }
 
   function handleFastAction() {
@@ -2403,11 +2406,11 @@ function App() {
       label: 'Readiness signals',
       value: syncStatusLabel,
       detail: stepGoalHit
-        ? `Step floor cleared through your Fitbit movement signal.`
+        ? `Step floor cleared through your Google Health movement signal.`
         : `${remainingSteps.toLocaleString()} steps left to hit the ${formattedStepGoal}-step floor.`,
       trend: hasSupabaseConfig ? (stepGoalHit ? 'good' : 'neutral') : 'watch',
       targetId: 'sync' as const,
-      eyebrow: 'Fitbit / Health Connect',
+      eyebrow: 'Google Health / Health Connect',
       metrics: [
         { label: 'Sleep', value: sleepMetric ? `${sleepMetric.value}${sleepMetric.unit ?? ''}` : '--' },
         { label: 'Steps', value: currentSteps > 0 ? currentSteps.toLocaleString() : '--' },
@@ -2415,7 +2418,7 @@ function App() {
       ],
       cta: stepGoalHit
         ? `Daily movement floor achieved. ${restingHrMetric ? `Resting HR is ${restingHrMetric.value}${restingHrMetric.unit ?? ''}.` : ''}`.trim()
-        : `Fitbit watch data is now the cleanest way to verify whether today reaches your step minimum.`,
+        : `Google Health data is now the cleanest web-app path for verifying whether today reaches your step minimum.`,
     },
   ] as const
 
@@ -3132,17 +3135,17 @@ function App() {
           <article id="sync" className="panel sync-panel">
             <div className="panel-title">
               <Smartphone size={20} aria-hidden="true" />
-              <h2>Fitbit Sync Inbox</h2>
+              <h2>Health Sync Inbox</h2>
             </div>
             <p className="sync-roadmap-note">{cloudSyncMessage}</p>
             <div className="sync-summary">
               <section className="sync-summary-card">
-                <span>Fitbit bridge</span>
+                <span>Google Health bridge</span>
                 <strong>{fitbitBridge.connected ? 'Connected' : 'Not connected'}</strong>
                 <p>{fitbitMessage}</p>
                 <div className="fitbit-action-row">
                   <button type="button" className="fitbit-primary-button" onClick={connectFitbitBridge}>
-                    {fitbitBridge.connected ? 'Reconnect Fitbit' : 'Connect Fitbit'}
+                    {fitbitBridge.connected ? 'Reconnect Google Health' : 'Connect Google Health'}
                   </button>
                   <button
                     type="button"
@@ -3193,7 +3196,7 @@ function App() {
                 <strong>{currentSteps.toLocaleString()}</strong>
                 <span>
                   {stepGoalHit
-                    ? 'Fitbit says the movement floor is done for today.'
+                    ? 'Google Health says the movement floor is done for today.'
                     : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`}
                 </span>
               </div>
@@ -3201,7 +3204,7 @@ function App() {
             <div className="health-connect-panel">
               <div className="health-connect-header">
                 <h3>Health Connect Path</h3>
-                <p>The phone side is partly ready. For this web app, Fitbit OAuth is the live path; Health Connect still needs an Android companion layer.</p>
+                <p>The phone side is partly ready. For this web app, Google Health OAuth is the live path; Health Connect still needs an Android companion layer.</p>
               </div>
               <div className="health-connect-steps">
                 {healthConnectSetup.map((item) => (
@@ -3213,7 +3216,7 @@ function App() {
                 ))}
               </div>
               <p className="sync-roadmap-note">
-                Practical integration route: Fitbit writes to Health Connect on Android, then a LifeOS Android wrapper or companion app reads those records and sends daily summaries into this dashboard.
+                Practical integration route: Google Health powers the web dashboard path, while Health Connect can still feed a future Android companion layer.
               </p>
             </div>
           </article>
@@ -3240,7 +3243,7 @@ function App() {
             </div>
             <p className="muted">
               Command Center captures the day. Notion remains the editable source of truth for the
-              Daily Health Log, Fasting Sessions, Meal Plan, Workout Log, Exercise Library, Fitbit
+              Daily Health Log, Fasting Sessions, Meal Plan, Workout Log, Exercise Library, Health
               Sync Inbox, and Weekly Reviews.
             </p>
           </article>

@@ -3,9 +3,9 @@ import {
   parseCookies,
   sendJson,
   setCors,
-  storeFitbitToken,
+  storeHealthToken,
   upsertDailyMetrics,
-  fetchTodayFitbitMetrics,
+  fetchTodayHealthMetrics,
   webAppUrl,
 } from './_shared.js'
 
@@ -30,16 +30,16 @@ export default async function handler(request, response) {
     const cookies = parseCookies(request)
 
     if (!code) {
-      throw new Error('Missing Fitbit authorization code')
+      throw new Error('Missing Google Health authorization code')
     }
 
     if (!state || state !== cookies.lifeos_fitbit_oauth_state) {
-      throw new Error('Fitbit OAuth state did not match')
+      throw new Error('Google Health OAuth state did not match')
     }
 
     const tokenPayload = await exchangeAuthorizationCode(code)
-    await storeFitbitToken(tokenPayload)
-    const todayMetrics = await fetchTodayFitbitMetrics()
+    await storeHealthToken(tokenPayload)
+    const todayMetrics = await fetchTodayHealthMetrics()
     await upsertDailyMetrics(todayMetrics)
 
     response.setHeader(
@@ -54,10 +54,9 @@ export default async function handler(request, response) {
     response.setHeader(
       'Location',
       `${webAppUrl()}?fitbit=error&message=${encodeURIComponent(
-        error instanceof Error ? error.message : 'Fitbit connection failed',
+        error instanceof Error ? error.message : 'Google Health connection failed',
       )}`,
     )
     response.end()
   }
 }
-

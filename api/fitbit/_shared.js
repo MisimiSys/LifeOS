@@ -10,7 +10,12 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ]
 
 const DEFAULT_LIFEOS_WEB_URL = 'https://misimisys.github.io/LifeOS/'
-const FITBIT_SCOPE = ['activity', 'heartrate', 'sleep', 'weight', 'profile'].join(' ')
+const GOOGLE_HEALTH_SCOPES = [
+  'https://www.googleapis.com/auth/fitness.activity.read',
+  'https://www.googleapis.com/auth/fitness.body.read',
+  'https://www.googleapis.com/auth/fitness.heart_rate.read',
+  'https://www.googleapis.com/auth/fitness.sleep.read',
+].join(' ')
 
 function requiredEnv(name) {
   const value = process.env[name]
@@ -20,16 +25,16 @@ function requiredEnv(name) {
   return value
 }
 
-function fitbitClientId() {
-  return requiredEnv('FITBIT_CLIENT_ID')
+function googleClientId() {
+  return process.env.GOOGLE_HEALTH_CLIENT_ID || requiredEnv('FITBIT_CLIENT_ID')
 }
 
-function fitbitClientSecret() {
-  return requiredEnv('FITBIT_CLIENT_SECRET')
+function googleClientSecret() {
+  return process.env.GOOGLE_HEALTH_CLIENT_SECRET || requiredEnv('FITBIT_CLIENT_SECRET')
 }
 
-export function fitbitRedirectUri() {
-  return requiredEnv('FITBIT_REDIRECT_URI')
+export function healthRedirectUri() {
+  return process.env.GOOGLE_HEALTH_REDIRECT_URI || requiredEnv('FITBIT_REDIRECT_URI')
 }
 
 function supabaseUrl() {
@@ -74,16 +79,6 @@ export function setCors(request, response) {
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 }
 
-export function handleOptions(request, response) {
-  setCors(request, response)
-  if (request.method === 'OPTIONS') {
-    response.statusCode = 204
-    response.end()
-    return true
-  }
-  return false
-}
-
 export function parseCookies(request) {
   return String(request.headers.cookie || '')
     .split(';')
@@ -102,14 +97,16 @@ export function parseCookies(request) {
 export function authRedirectUrl(state) {
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: fitbitClientId(),
-    redirect_uri: fitbitRedirectUri(),
-    scope: FITBIT_SCOPE,
-    expires_in: '31536000',
+    client_id: googleClientId(),
+    redirect_uri: healthRedirectUri(),
+    scope: GOOGLE_HEALTH_SCOPES,
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
     state,
   })
 
-  return `https://www.fitbit.com/oauth2/authorize?${params.toString()}`
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 }
 
 function supabaseAdmin() {
@@ -118,40 +115,37 @@ function supabaseAdmin() {
   })
 }
 
-function fitbitBasicAuthHeader() {
-  return Buffer.from(`${fitbitClientId()}:${fitbitClientSecret()}`).toString('base64')
-}
-
 export async function exchangeAuthorizationCode(code) {
-  const response = await fetch('https://api.fitbit.com/oauth2/token', {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${fitbitBasicAuthHeader()}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
-      client_id: fitbitClientId(),
+      client_id: googleClientId(),
+      client_secret: googleClientSecret(),
       grant_type: 'authorization_code',
-      redirect_uri: fitbitRedirectUri(),
+      redirect_uri: healthRedirectUri(),
       code,
     }),
   })
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || payload.error_description || 'Fitbit token exchange failed')
+    throw new Error(payload.error_description || payload.error || 'Google Health token exchange failed')
   }
   return payload
 }
 
-export async function refreshFitbitToken(refreshToken) {
-  const response = await fetch('https://api.fitbit.com/oauth2/token', {
+export async function refreshHealthToken(refreshToken) {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${fitbitBasicAuthHeader()}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
+      client_id: googleClientId(),
+      client_secret: googleClientSecret(),
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
     }),
@@ -159,19 +153,19 @@ export async function refreshFitbitToken(refreshToken) {
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || payload.error_description || 'Fitbit token refresh failed')
+    throw new Error(payload.error_description || payload.error || 'Google Health token refresh failed')
   }
   return payload
 }
 
-export async function getStoredFitbitToken() {
+export async function getStoredHealthToken() {
   const admin = supabaseAdmin()
   const { data, error } = await admin.from('fitbit_tokens').select('*').eq('id', 'primary').maybeSingle()
   if (error) throw error
   return data
 }
 
-export async function storeFitbitToken(payload) {
+export async function storeHealthToken(payload) {
   const admin = supabaseAdmin()
   const expiresAt = new Date(Date.now() + Number(payload.expires_in || 0) * 1000).toISOString()
   const row = {
@@ -179,8 +173,8 @@ export async function storeFitbitToken(payload) {
     access_token: payload.access_token,
     refresh_token: payload.refresh_token,
     expires_at: expiresAt,
-    scope: payload.scope || FITBIT_SCOPE,
-    fitbit_user_id: payload.user_id || null,
+    scope: payload.scope || GOOGLE_HEALTH_SCOPES,
+    fitbit_user_id: payload.id_token || null,
     updated_at: new Date().toISOString(),
   }
 
@@ -189,10 +183,10 @@ export async function storeFitbitToken(payload) {
   return row
 }
 
-export async function getValidFitbitAccessToken() {
-  const stored = await getStoredFitbitToken()
+export async function getValidHealthAccessToken() {
+  const stored = await getStoredHealthToken()
   if (!stored?.refresh_token) {
-    throw new Error('Fitbit is not connected yet')
+    throw new Error('Google Health is not connected yet')
   }
 
   const expiresAtMs = stored.expires_at ? new Date(stored.expires_at).getTime() : 0
@@ -202,62 +196,118 @@ export async function getValidFitbitAccessToken() {
     return stored.access_token
   }
 
-  const refreshed = await refreshFitbitToken(stored.refresh_token)
-  const saved = await storeFitbitToken(refreshed)
+  const refreshed = await refreshHealthToken(stored.refresh_token)
+  const saved = await storeHealthToken({
+    ...stored,
+    ...refreshed,
+    refresh_token: refreshed.refresh_token || stored.refresh_token,
+  })
   return saved.access_token
 }
 
-async function fitbitRequest(path, accessToken) {
-  const response = await fetch(`https://api.fitbit.com${path}`, {
+async function googleFitRequest(path, accessToken, init = {}) {
+  const response = await fetch(`https://www.googleapis.com${path}`, {
+    ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
     },
   })
 
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || `Fitbit request failed: ${response.status}`)
+    throw new Error(payload.error?.message || `Google Health request failed: ${response.status}`)
   }
   return payload
 }
 
-function totalDistanceKm(summary) {
-  const distances = Array.isArray(summary?.distances) ? summary.distances : []
-  const total = distances.find((entry) => entry.activity === 'total') || distances[0]
-  return total?.distance ?? null
+function dayWindow() {
+  const now = new Date()
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(now)
+  end.setHours(23, 59, 59, 999)
+  return {
+    start,
+    end,
+    startNs: String(start.getTime() * 1_000_000),
+    endNs: String(end.getTime() * 1_000_000),
+  }
 }
 
-export async function fetchTodayFitbitMetrics() {
-  const accessToken = await getValidFitbitAccessToken()
-  const [activities, sleep, weight] = await Promise.all([
-    fitbitRequest('/1/user/-/activities/date/today.json', accessToken),
-    fitbitRequest('/1.2/user/-/sleep/date/today.json', accessToken),
-    fitbitRequest('/1/user/-/body/log/weight/date/today/1d.json', accessToken),
+function aggregateNumberValue(bucket, dataTypeName) {
+  const dataset = (bucket?.dataset || []).find((entry) => entry.dataSourceId?.includes(dataTypeName))
+  const point = dataset?.point?.[0]
+  const value = point?.value?.[0]
+  if (!value) return null
+  if (typeof value.intVal === 'number') return value.intVal
+  if (typeof value.fpVal === 'number') return value.fpVal
+  return null
+}
+
+async function aggregateMetric(accessToken, dataTypeName) {
+  const { startNs, endNs } = dayWindow()
+  const payload = await googleFitRequest('/fitness/v1/users/me/dataset:aggregate', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      aggregateBy: [{ dataTypeName }],
+      bucketByTime: { durationMillis: 86_400_000 },
+      startTimeMillis: Number(startNs) / 1_000_000,
+      endTimeMillis: Number(endNs) / 1_000_000,
+    }),
+  })
+
+  const bucket = payload.bucket?.[0]
+  return aggregateNumberValue(bucket, dataTypeName)
+}
+
+async function fetchSleepHours(accessToken) {
+  const { startNs, endNs } = dayWindow()
+  const payload = await googleFitRequest(
+    `/fitness/v1/users/me/sessions?startTime=${encodeURIComponent(
+      new Date(Number(startNs) / 1_000_000).toISOString(),
+    )}&endTime=${encodeURIComponent(new Date(Number(endNs) / 1_000_000).toISOString())}&activityType=72`,
+    accessToken,
+  )
+
+  const sessions = Array.isArray(payload.session) ? payload.session : []
+  const totalMs = sessions.reduce((sum, session) => {
+    const startMs = Number(session.startTimeMillis || 0)
+    const endMs = Number(session.endTimeMillis || 0)
+    if (!startMs || !endMs || endMs <= startMs) return sum
+    return sum + (endMs - startMs)
+  }, 0)
+
+  return totalMs > 0 ? totalMs / (1000 * 60 * 60) : null
+}
+
+export async function fetchTodayHealthMetrics() {
+  const accessToken = await getValidHealthAccessToken()
+  const [steps, calories, heartRate, weightKg, sleepHours] = await Promise.all([
+    aggregateMetric(accessToken, 'com.google.step_count.delta'),
+    aggregateMetric(accessToken, 'com.google.calories.expended').catch(() => null),
+    aggregateMetric(accessToken, 'com.google.heart_rate.bpm').catch(() => null),
+    aggregateMetric(accessToken, 'com.google.weight').catch(() => null),
+    fetchSleepHours(accessToken).catch(() => null),
   ])
 
-  const activitySummary = activities.summary || {}
-  const latestSleepLog = Array.isArray(sleep.sleep) ? sleep.sleep[0] : null
-  const latestWeightLog = Array.isArray(weight.weight) && weight.weight.length > 0 ? weight.weight[0] : null
-  const totalMinutesAsleep =
-    sleep.summary?.totalMinutesAsleep ??
-    latestSleepLog?.minutesAsleep ??
-    null
+  const today = new Date().toISOString().slice(0, 10)
 
   return {
-    date: activities.activities?.[0]?.dateTime || new Date().toISOString().slice(0, 10),
-    source: 'Fitbit',
+    date: today,
+    source: 'Google Health',
     sync_status: 'Imported',
-    sleep_hours: totalMinutesAsleep != null ? Number(totalMinutesAsleep) / 60 : null,
-    sleep_score: latestSleepLog?.levels?.summary?.deep?.count != null ? null : null,
-    resting_heart_rate: activitySummary.restingHeartRate ?? null,
-    steps: activitySummary.steps ?? null,
-    active_zone_minutes:
-      Number(activitySummary.fairlyActiveMinutes || 0) + Number(activitySummary.veryActiveMinutes || 0),
-    calories_burned: activitySummary.caloriesOut ?? null,
-    distance_km: totalDistanceKm(activitySummary),
-    workout_minutes: Number(activitySummary.fairlyActiveMinutes || 0) + Number(activitySummary.veryActiveMinutes || 0),
-    weight_kg: latestWeightLog?.weight ?? null,
+    sleep_hours: sleepHours,
+    sleep_score: null,
+    resting_heart_rate: heartRate,
+    steps: typeof steps === 'number' ? Math.round(steps) : null,
+    active_zone_minutes: null,
+    calories_burned: typeof calories === 'number' ? Math.round(calories) : null,
+    distance_km: null,
+    workout_minutes: null,
+    weight_kg: typeof weightKg === 'number' ? weightKg : null,
     synced_at: new Date().toISOString(),
   }
 }
@@ -268,7 +318,7 @@ export async function upsertDailyMetrics(row) {
   if (error) throw error
 }
 
-export async function latestFitbitMetrics() {
+export async function latestHealthMetrics() {
   const admin = supabaseAdmin()
   const { data, error } = await admin
     .from('fitbit_daily_metrics')
