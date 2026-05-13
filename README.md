@@ -21,6 +21,19 @@ npm run build
 npm run lint
 ```
 
+## Phone-First Health Sync
+
+LifeOS now has:
+
+- a secure ingest endpoint at `/api/health/ingest`
+- a Capacitor config for a future Android shell
+- a client helper at `src/mobile/phoneHealthSync.ts`
+
+See:
+
+- `docs/phone-health-sync.md`
+- `docs/android-health-connect-next-step.md`
+
 ## Near-Term Roadmap
 
 1. Wire dashboard data to local typed fixtures.

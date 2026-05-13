@@ -2901,6 +2901,107 @@ function App() {
             </article>
           </section>
 
+          <article id="sync" className="panel sync-panel">
+            <div className="panel-title">
+              <Smartphone size={20} aria-hidden="true" />
+              <h2>Health Sync Inbox</h2>
+            </div>
+            <p className="sync-roadmap-note">{cloudSyncMessage}</p>
+            <div className="sync-summary">
+              <section className="sync-summary-card">
+                <span>Phone health source</span>
+                <strong>
+                  {fitbitBridge.connected
+                    ? hasImportedPhoneMetric
+                      ? 'Connected and feeding data'
+                      : 'Connected, waiting for metrics'
+                    : 'Not connected'}
+                </strong>
+                <p>{fitbitMessage}</p>
+                <div className="fitbit-action-row">
+                  <button type="button" className="fitbit-primary-button" onClick={connectFitbitBridge}>
+                    {fitbitBridge.connected ? 'Reconnect phone health' : 'Connect phone health'}
+                  </button>
+                  <button
+                    type="button"
+                    className="fitbit-secondary-button"
+                    onClick={() => void syncFitbitBridgeNow()}
+                    disabled={!fitbitBridge.connected || isFitbitSyncing}
+                  >
+                    {isFitbitSyncing ? 'Syncing…' : 'Pull latest phone data'}
+                  </button>
+                </div>
+              </section>
+              <section className="sync-summary-card">
+                <span>Shared dashboard</span>
+                <strong>{hasSupabaseConfig ? 'Desktop is reading shared data' : 'Shared sync not configured'}</strong>
+                <p>
+                  Phone is the main sync device. Desktop should mirror the Supabase health and LifeOS data after phone sync.
+                </p>
+              </section>
+              <section className="sync-summary-card">
+                <span>Phone ingest path</span>
+                <strong>{hasImportedPhoneMetric ? 'Usable health data landed' : 'Secure phone ingest API is ready'}</strong>
+                <p>
+                  {hasImportedPhoneMetric
+                    ? 'The shared dashboard can now use real phone-side health values instead of placeholders.'
+                    : 'The backend is ready for a phone-side Health Connect reader to POST daily metrics into LifeOS without depending on desktop browser auth.'}
+                </p>
+              </section>
+            </div>
+            <div className="metric-grid">
+              {syncMetrics.map((metric) => (
+                <div className={`metric-card metric-${metric.status.toLowerCase()}`} key={metric.label}>
+                  <span>{metric.label}</span>
+                  <strong>
+                    {metric.value}
+                    {metric.unit ? <small>{metric.unit}</small> : null}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <section className={`step-goal-card ${stepGoalHit ? 'step-goal-hit' : 'step-goal-chasing'}`}>
+              <div className="step-goal-head">
+                <div>
+                  <span>Daily step floor</span>
+                  <strong>{formattedStepGoal} steps</strong>
+                </div>
+                <p>{stepGoalHit ? 'Achieved' : 'In progress'}</p>
+              </div>
+              <div className="step-goal-progress" aria-hidden="true">
+                <div className="step-goal-fill" style={{ width: `${stepGoalProgress}%` }} />
+              </div>
+              <div className="step-goal-meta">
+                <strong>{currentSteps.toLocaleString()}</strong>
+                <span>
+                  {hasImportedPhoneMetric
+                    ? stepGoalHit
+                      ? 'Phone health data says the movement floor is done for today.'
+                      : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`
+                    : 'Waiting for real phone step data before LifeOS can score today against the 10,000-step floor.'}
+                </span>
+              </div>
+            </section>
+            <div className="health-connect-panel">
+              <div className="health-connect-header">
+                <h3>Health Connect Path</h3>
+                <p>LifeOS is mobile first. Your phone remains the primary health sync device, while desktop works as the shared dashboard and review surface.</p>
+              </div>
+              <div className="health-connect-steps">
+                {healthConnectSetup.map((item) => (
+                  <section className={`health-connect-step step-${item.status.toLowerCase().replace(/\s+/g, '-')}`} key={item.step}>
+                    <span>{item.status}</span>
+                    <strong>{item.step}</strong>
+                    <p>{item.detail}</p>
+                  </section>
+                ))}
+              </div>
+              <p className="sync-roadmap-note">
+                Practical route: Fitbit watch to Fitbit app to phone health source, then a phone-side LifeOS sync layer POSTs into the secure ingest API and desktop reflects the Supabase row.
+              </p>
+            </div>
+          </article>
+
           <article id="meals" className="panel meals-panel">
             <div className="panel-title">
               <Apple size={20} aria-hidden="true" />
@@ -3159,107 +3260,6 @@ function App() {
                 </article>
               ))}
               {fastingHistory.length === 0 ? <p className="muted">Completed fasts will start building your record here.</p> : null}
-            </div>
-          </article>
-
-          <article id="sync" className="panel sync-panel">
-            <div className="panel-title">
-              <Smartphone size={20} aria-hidden="true" />
-              <h2>Health Sync Inbox</h2>
-            </div>
-            <p className="sync-roadmap-note">{cloudSyncMessage}</p>
-            <div className="sync-summary">
-              <section className="sync-summary-card">
-                <span>Phone health source</span>
-                <strong>
-                  {fitbitBridge.connected
-                    ? hasImportedPhoneMetric
-                      ? 'Connected and feeding data'
-                      : 'Connected, waiting for metrics'
-                    : 'Not connected'}
-                </strong>
-                <p>{fitbitMessage}</p>
-                <div className="fitbit-action-row">
-                  <button type="button" className="fitbit-primary-button" onClick={connectFitbitBridge}>
-                    {fitbitBridge.connected ? 'Reconnect phone health' : 'Connect phone health'}
-                  </button>
-                  <button
-                    type="button"
-                    className="fitbit-secondary-button"
-                    onClick={() => void syncFitbitBridgeNow()}
-                    disabled={!fitbitBridge.connected || isFitbitSyncing}
-                  >
-                    {isFitbitSyncing ? 'Syncing…' : 'Pull latest phone data'}
-                  </button>
-                </div>
-              </section>
-              <section className="sync-summary-card">
-                <span>Shared dashboard</span>
-                <strong>{hasSupabaseConfig ? 'Desktop is reading shared data' : 'Shared sync not configured'}</strong>
-                <p>
-                  Phone is the main sync device. Desktop should mirror the Supabase health and LifeOS data after phone sync.
-                </p>
-              </section>
-              <section className="sync-summary-card">
-                <span>Phone ingest path</span>
-                <strong>{hasImportedPhoneMetric ? 'Usable health data landed' : 'Secure phone ingest API is ready'}</strong>
-                <p>
-                  {hasImportedPhoneMetric
-                    ? 'The shared dashboard can now use real phone-side health values instead of placeholders.'
-                    : 'The backend is ready for a phone-side Health Connect reader to POST daily metrics into LifeOS without depending on desktop browser auth.'}
-                </p>
-              </section>
-            </div>
-            <div className="metric-grid">
-              {syncMetrics.map((metric) => (
-                <div className={`metric-card metric-${metric.status.toLowerCase()}`} key={metric.label}>
-                  <span>{metric.label}</span>
-                  <strong>
-                    {metric.value}
-                    {metric.unit ? <small>{metric.unit}</small> : null}
-                  </strong>
-                </div>
-              ))}
-            </div>
-            <section className={`step-goal-card ${stepGoalHit ? 'step-goal-hit' : 'step-goal-chasing'}`}>
-              <div className="step-goal-head">
-                <div>
-                  <span>Daily step floor</span>
-                  <strong>{formattedStepGoal} steps</strong>
-                </div>
-                <p>{stepGoalHit ? 'Achieved' : 'In progress'}</p>
-              </div>
-              <div className="step-goal-progress" aria-hidden="true">
-                <div className="step-goal-fill" style={{ width: `${stepGoalProgress}%` }} />
-              </div>
-              <div className="step-goal-meta">
-                <strong>{currentSteps.toLocaleString()}</strong>
-                <span>
-                  {hasImportedPhoneMetric
-                    ? stepGoalHit
-                      ? 'Phone health data says the movement floor is done for today.'
-                      : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`
-                    : 'Waiting for real phone step data before LifeOS can score today against the 10,000-step floor.'}
-                </span>
-              </div>
-            </section>
-            <div className="health-connect-panel">
-              <div className="health-connect-header">
-                <h3>Health Connect Path</h3>
-                <p>LifeOS is mobile first. Your phone remains the primary health sync device, while desktop works as the shared dashboard and review surface.</p>
-              </div>
-              <div className="health-connect-steps">
-                {healthConnectSetup.map((item) => (
-                  <section className={`health-connect-step step-${item.status.toLowerCase().replace(/\s+/g, '-')}`} key={item.step}>
-                    <span>{item.status}</span>
-                    <strong>{item.step}</strong>
-                    <p>{item.detail}</p>
-                  </section>
-                ))}
-              </div>
-              <p className="sync-roadmap-note">
-                Practical route: Fitbit watch to Fitbit app to phone health source, then a phone-side LifeOS sync layer POSTs into the secure ingest API and desktop reflects the Supabase row.
-              </p>
             </div>
           </article>
 
