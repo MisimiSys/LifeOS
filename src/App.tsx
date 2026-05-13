@@ -1936,7 +1936,12 @@ function App() {
   }
 
   function connectFitbitBridge() {
-    window.location.href = HEALTH_CONNECT_ENDPOINT
+    const healthWindow = window.open(HEALTH_CONNECT_ENDPOINT, '_blank', 'noopener,noreferrer')
+    if (!healthWindow) {
+      window.location.href = HEALTH_CONNECT_ENDPOINT
+      return
+    }
+    setFitbitMessage('Google Health opened in a new tab. Complete sign-in there, then return here.')
   }
 
   function handleFastAction() {
