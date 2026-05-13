@@ -37,8 +37,8 @@ import {
   todayIso,
   type FastingPlan,
 } from './data/today'
-import type { FastingSession, MealPlanItem } from './domain/lifeos'
-import { fastingProgress } from './domain/lifeos'
+import type { FastingSession, MealPlanItem, SyncMetric } from './domain/lifeos'
+import { computeReadiness, fastingProgress } from './domain/lifeos'
 import {
   fetchLifeOsCloudState,
   hasSupabaseConfig,
@@ -57,7 +57,12 @@ const NOTION_LIFEOS_URL =
   'https://app.notion.com/p/LifeOS-Command-Center-3544ab8a5f28813d967af856319c8f67?source=copy_link'
 const LEARNING_PORTAL_URL = 'https://misimisys.github.io/portal/'
 const DEFAULT_NOTION_SYNC_ENDPOINT = 'https://life-os-lac-pi.vercel.app/api/recipes/upsert'
+const DEFAULT_FITBIT_BRIDGE_BASE = 'https://life-os-lac-pi.vercel.app'
 const NOTION_SYNC_ENDPOINT = import.meta.env.VITE_LIFEOS_SYNC_API_URL ?? DEFAULT_NOTION_SYNC_ENDPOINT
+const FITBIT_BRIDGE_BASE = import.meta.env.VITE_LIFEOS_FITBIT_API_BASE ?? DEFAULT_FITBIT_BRIDGE_BASE
+const FITBIT_STATUS_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/status`
+const FITBIT_CONNECT_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/connect`
+const FITBIT_SYNC_ENDPOINT = `${FITBIT_BRIDGE_BASE}/api/fitbit/sync`
 const ACTIVE_FAST_STORAGE_KEY = 'lifeos.activeFastStartIso'
 const FASTING_PLAN_STORAGE_KEY = 'lifeos.selectedFastingPlan'
 const CUSTOM_PLAN_STORAGE_KEY = 'lifeos.customFastingPlan'
@@ -571,6 +576,28 @@ type ChallengeDefinition = {
 type ActiveChallengeState = {
   challengeId: string
   startedOn: string
+}
+
+type FitbitDailyMetrics = {
+  date: string
+  source: string
+  sync_status: string
+  sleep_hours: number | null
+  sleep_score: number | null
+  resting_heart_rate: number | null
+  steps: number | null
+  active_zone_minutes: number | null
+  calories_burned: number | null
+  distance_km: number | null
+  workout_minutes: number | null
+  weight_kg: number | null
+  synced_at: string | null
+}
+
+type FitbitBridgeState = {
+  connected: boolean
+  lastSyncedAt: string | null
+  latestMetrics: FitbitDailyMetrics | null
 }
 
 type WorkoutLogEntry = {
@@ -1191,6 +1218,26 @@ function relativeDateLabel(dateIso: string, referenceDateIso: string) {
   return dateIso
 }
 
+function metricStatus(value: number | null | undefined, goodFloor: number, watchFloor: number) {
+  if (value == null) return 'Missing' as const
+  if (value >= goodFloor) return 'Good' as const
+  if (value >= watchFloor) return 'Watch' as const
+  return 'Missing' as const
+}
+
+function formatFitbitSyncStamp(iso: string | null) {
+  if (!iso) return 'No Fitbit sync yet'
+  const stamp = new Date(iso)
+  if (Number.isNaN(stamp.getTime())) return 'No Fitbit sync yet'
+
+  return `Last Fitbit sync ${new Intl.DateTimeFormat('en-NG', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(stamp)}`
+}
+
 function App() {
   const [selectedDate, setSelectedDate] = useState(todayIso)
   const [clock, setClock] = useState(() => new Date())
@@ -1223,6 +1270,13 @@ function App() {
   const [cloudSyncMessage, setCloudSyncMessage] = useState(
     hasSupabaseConfig ? 'Cloud sync ready. Loading shared LifeOS data.' : 'Cloud sync not configured. Using local device storage.',
   )
+  const [fitbitBridge, setFitbitBridge] = useState<FitbitBridgeState>({
+    connected: false,
+    lastSyncedAt: null,
+    latestMetrics: null,
+  })
+  const [fitbitMessage, setFitbitMessage] = useState('Fitbit bridge not connected yet.')
+  const [isFitbitSyncing, setIsFitbitSyncing] = useState(false)
   const hasHydratedCloudState = useRef(false)
   const isApplyingCloudState = useRef(false)
   const cloudHydrationInFlight = useRef(false)
@@ -1277,7 +1331,108 @@ function App() {
     [plannedFastEnd, plannedFastStart, selectedDate, timeDraftDate],
   )
   const weekPreview = useMemo(() => getWeekPreview(selectedDate), [selectedDate])
-  const { log, meals, workout, syncMetrics, priorities } = todayPlan
+  const { meals, workout, priorities } = todayPlan
+  const fitbitMetricsForSelectedDate = useMemo(
+    () =>
+      fitbitBridge.latestMetrics && fitbitBridge.latestMetrics.date === selectedDate
+        ? fitbitBridge.latestMetrics
+        : null,
+    [fitbitBridge.latestMetrics, selectedDate],
+  )
+  const log = useMemo(() => {
+    if (!fitbitMetricsForSelectedDate) return todayPlan.log
+
+    const merged = {
+      ...todayPlan.log,
+      sleepHours: fitbitMetricsForSelectedDate.sleep_hours ?? todayPlan.log.sleepHours,
+      sleepScore: fitbitMetricsForSelectedDate.sleep_score ?? todayPlan.log.sleepScore,
+      restingHeartRate: fitbitMetricsForSelectedDate.resting_heart_rate ?? todayPlan.log.restingHeartRate,
+      steps: fitbitMetricsForSelectedDate.steps ?? todayPlan.log.steps,
+      activeZoneMinutes: fitbitMetricsForSelectedDate.active_zone_minutes ?? todayPlan.log.activeZoneMinutes,
+      caloriesBurned: fitbitMetricsForSelectedDate.calories_burned ?? todayPlan.log.caloriesBurned,
+      weightKg: fitbitMetricsForSelectedDate.weight_kg ?? todayPlan.log.weightKg,
+    }
+
+    return {
+      ...merged,
+      readiness: computeReadiness({
+        sleepHours: merged.sleepHours,
+        restingHeartRate: merged.restingHeartRate,
+      }),
+    }
+  }, [fitbitMetricsForSelectedDate, todayPlan.log])
+  const syncMetrics = useMemo<SyncMetric[]>(() => {
+    if (!fitbitMetricsForSelectedDate) return todayPlan.syncMetrics
+
+    return [
+      {
+        label: 'Sleep',
+        value:
+          fitbitMetricsForSelectedDate.sleep_hours != null
+            ? fitbitMetricsForSelectedDate.sleep_hours.toFixed(1)
+            : '--',
+        unit: 'h',
+        status: metricStatus(fitbitMetricsForSelectedDate.sleep_hours, 7, 6),
+      },
+      {
+        label: 'Sleep score',
+        value:
+          fitbitMetricsForSelectedDate.sleep_score != null
+            ? `${fitbitMetricsForSelectedDate.sleep_score}`
+            : '--',
+        status: fitbitMetricsForSelectedDate.sleep_score != null ? 'Watch' : 'Missing',
+      },
+      {
+        label: 'Resting HR',
+        value:
+          fitbitMetricsForSelectedDate.resting_heart_rate != null
+            ? `${fitbitMetricsForSelectedDate.resting_heart_rate}`
+            : '--',
+        unit: 'bpm',
+        status:
+          fitbitMetricsForSelectedDate.resting_heart_rate == null
+            ? 'Missing'
+            : fitbitMetricsForSelectedDate.resting_heart_rate <= 75
+              ? 'Good'
+              : 'Watch',
+      },
+      {
+        label: 'Steps',
+        value:
+          fitbitMetricsForSelectedDate.steps != null
+            ? fitbitMetricsForSelectedDate.steps.toLocaleString('en-NG')
+            : '--',
+        status:
+          fitbitMetricsForSelectedDate.steps == null
+            ? 'Missing'
+            : fitbitMetricsForSelectedDate.steps >= DAILY_STEP_GOAL
+              ? 'Good'
+              : 'Watch',
+      },
+      {
+        label: 'Zone mins',
+        value:
+          fitbitMetricsForSelectedDate.active_zone_minutes != null
+            ? `${fitbitMetricsForSelectedDate.active_zone_minutes}`
+            : '--',
+        status:
+          fitbitMetricsForSelectedDate.active_zone_minutes == null
+            ? 'Missing'
+            : fitbitMetricsForSelectedDate.active_zone_minutes >= 20
+              ? 'Good'
+              : 'Watch',
+      },
+      {
+        label: 'Weight',
+        value:
+          fitbitMetricsForSelectedDate.weight_kg != null
+            ? fitbitMetricsForSelectedDate.weight_kg.toFixed(1)
+            : '--',
+        unit: 'kg',
+        status: fitbitMetricsForSelectedDate.weight_kg != null ? 'Watch' : 'Missing',
+      },
+    ]
+  }, [fitbitMetricsForSelectedDate, todayPlan.syncMetrics])
   const displayedMeals = mealTimelineByDate[selectedDate] ?? meals
   const isTodaySelected = selectedDate === todayIso()
   const isLiveFastActive = Boolean(activeFastStartIso && isTodaySelected)
@@ -1704,6 +1859,82 @@ function App() {
       cancelled = true
     }
   }, [fastingHistory, workoutLog, mealTimelineByDate, recipes, liftProgress])
+
+  const loadFitbitBridgeStatus = useCallback(async () => {
+    try {
+      const response = await fetch(FITBIT_STATUS_ENDPOINT, { method: 'GET' })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not load Fitbit bridge status')
+      }
+
+      setFitbitBridge({
+        connected: Boolean(payload.connected),
+        lastSyncedAt: payload.lastSyncedAt ?? null,
+        latestMetrics: payload.latestMetrics ?? null,
+      })
+      setFitbitMessage(
+        payload.connected
+          ? formatFitbitSyncStamp(payload.lastSyncedAt ?? payload.latestMetrics?.synced_at ?? null)
+          : 'Fitbit bridge ready to connect. This will feed steps, sleep, heart rate, and weight into the dashboard.',
+      )
+    } catch (error) {
+      setFitbitMessage(error instanceof Error ? error.message : 'Could not load Fitbit bridge status.')
+    }
+  }, [])
+
+  useEffect(() => {
+    const bootLoadId = window.setTimeout(() => {
+      void loadFitbitBridgeStatus()
+    }, 0)
+
+    const params = new URLSearchParams(window.location.search)
+    const fitbitState = params.get('fitbit')
+    const fitbitError = params.get('message')
+    const callbackLoadId = window.setTimeout(() => {
+      if (fitbitState === 'connected') {
+        setFitbitMessage('Fitbit connected. Pulling the latest dashboard metrics now.')
+        window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`)
+        void loadFitbitBridgeStatus()
+      } else if (fitbitState === 'error') {
+        setFitbitMessage(fitbitError ?? 'Fitbit connection did not complete cleanly.')
+        window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`)
+      }
+    }, 0)
+    return () => {
+      window.clearTimeout(bootLoadId)
+      window.clearTimeout(callbackLoadId)
+    }
+  }, [loadFitbitBridgeStatus])
+
+  async function syncFitbitBridgeNow() {
+    setIsFitbitSyncing(true)
+    try {
+      const response = await fetch(FITBIT_SYNC_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'Fitbit sync failed')
+      }
+
+      setFitbitBridge({
+        connected: true,
+        lastSyncedAt: payload.metrics?.synced_at ?? new Date().toISOString(),
+        latestMetrics: payload.metrics ?? null,
+      })
+      setFitbitMessage(formatFitbitSyncStamp(payload.metrics?.synced_at ?? new Date().toISOString()))
+    } catch (error) {
+      setFitbitMessage(error instanceof Error ? error.message : 'Fitbit sync failed.')
+    } finally {
+      setIsFitbitSyncing(false)
+    }
+  }
+
+  function connectFitbitBridge() {
+    window.location.href = FITBIT_CONNECT_ENDPOINT
+  }
 
   function handleFastAction() {
     if (isLiveFastActive && activeFastStartIso) {
@@ -2906,6 +3137,24 @@ function App() {
             <p className="sync-roadmap-note">{cloudSyncMessage}</p>
             <div className="sync-summary">
               <section className="sync-summary-card">
+                <span>Fitbit bridge</span>
+                <strong>{fitbitBridge.connected ? 'Connected' : 'Not connected'}</strong>
+                <p>{fitbitMessage}</p>
+                <div className="fitbit-action-row">
+                  <button type="button" className="fitbit-primary-button" onClick={connectFitbitBridge}>
+                    {fitbitBridge.connected ? 'Reconnect Fitbit' : 'Connect Fitbit'}
+                  </button>
+                  <button
+                    type="button"
+                    className="fitbit-secondary-button"
+                    onClick={() => void syncFitbitBridgeNow()}
+                    disabled={!fitbitBridge.connected || isFitbitSyncing}
+                  >
+                    {isFitbitSyncing ? 'Syncing…' : 'Sync latest'}
+                  </button>
+                </div>
+              </section>
+              <section className="sync-summary-card">
                 <span>Bridge status</span>
                 <strong>{hasSupabaseConfig ? 'Cloud sync connected' : 'Cloud sync not configured'}</strong>
                 <p>
@@ -2952,7 +3201,7 @@ function App() {
             <div className="health-connect-panel">
               <div className="health-connect-header">
                 <h3>Health Connect Path</h3>
-                <p>The phone side is partly ready. LifeOS now needs the capture layer that can read Android health data safely.</p>
+                <p>The phone side is partly ready. For this web app, Fitbit OAuth is the live path; Health Connect still needs an Android companion layer.</p>
               </div>
               <div className="health-connect-steps">
                 {healthConnectSetup.map((item) => (

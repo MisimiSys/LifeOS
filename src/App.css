@@ -1984,6 +1984,44 @@ h3 {
   line-height: 1.5;
 }
 
+.fitbit-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.fitbit-primary-button,
+.fitbit-secondary-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.fitbit-primary-button {
+  border: 1px solid rgba(56, 111, 147, 0.18);
+  background: #386f93;
+  color: #fffdf8;
+}
+
+.fitbit-secondary-button {
+  border: 1px solid rgba(23, 32, 29, 0.12);
+  background: rgba(255, 253, 248, 0.92);
+  color: #17201d;
+}
+
+.fitbit-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .health-connect-panel {
   margin-top: 18px;
   padding: 16px;
