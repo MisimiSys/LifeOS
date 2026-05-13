@@ -19,26 +19,27 @@ const GOOGLE_HEALTH_SCOPES = [
 
 function requiredEnv(name) {
   const value = process.env[name]
-  if (!value) {
+  const normalized = typeof value === 'string' ? value.trim() : value
+  if (!normalized) {
     throw new Error(`${name} is not configured`)
   }
-  return value
+  return normalized
 }
 
 function googleClientId() {
-  return process.env.GOOGLE_HEALTH_CLIENT_ID || requiredEnv('FITBIT_CLIENT_ID')
+  return (process.env.GOOGLE_HEALTH_CLIENT_ID || process.env.FITBIT_CLIENT_ID || '').trim() || requiredEnv('FITBIT_CLIENT_ID')
 }
 
 function googleClientSecret() {
-  return process.env.GOOGLE_HEALTH_CLIENT_SECRET || requiredEnv('FITBIT_CLIENT_SECRET')
+  return (process.env.GOOGLE_HEALTH_CLIENT_SECRET || process.env.FITBIT_CLIENT_SECRET || '').trim() || requiredEnv('FITBIT_CLIENT_SECRET')
 }
 
 export function healthRedirectUri() {
-  return process.env.GOOGLE_HEALTH_REDIRECT_URI || requiredEnv('FITBIT_REDIRECT_URI')
+  return (process.env.GOOGLE_HEALTH_REDIRECT_URI || process.env.FITBIT_REDIRECT_URI || '').trim() || requiredEnv('FITBIT_REDIRECT_URI')
 }
 
 function supabaseUrl() {
-  return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || requiredEnv('VITE_SUPABASE_URL')
+  return (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim() || requiredEnv('VITE_SUPABASE_URL')
 }
 
 function supabaseServiceRoleKey() {
@@ -329,4 +330,3 @@ export async function latestHealthMetrics() {
   if (error) throw error
   return data
 }
-
