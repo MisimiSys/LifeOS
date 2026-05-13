@@ -1935,12 +1935,18 @@ function App() {
     }
   }
 
-  function connectFitbitBridge() {
-    const healthWindow = window.open(HEALTH_CONNECT_ENDPOINT, '_blank', 'noopener,noreferrer')
+  function connectFitbitBridge(event?: React.MouseEvent<HTMLButtonElement>) {
+    event?.preventDefault()
+    event?.stopPropagation()
+
+    const healthWindow = window.open('', '_blank')
     if (!healthWindow) {
-      window.location.href = HEALTH_CONNECT_ENDPOINT
+      setFitbitMessage('Google Health could not open in a new tab. Please allow popups for LifeOS and try again.')
       return
     }
+
+    healthWindow.opener = null
+    healthWindow.location.replace(HEALTH_CONNECT_ENDPOINT)
     setFitbitMessage('Google Health opened in a new tab. Complete sign-in there, then return here.')
 
     const statusPoll = window.setInterval(() => {
