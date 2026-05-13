@@ -1629,19 +1629,19 @@ function App() {
         detail: 'Health Connect is already installed on your Android phone.',
       },
       {
-        step: 'Fitbit permission handshake',
+        step: 'Fitbit to phone data path',
         status: 'Next',
-        detail: 'Fitbit must be allowed to write sleep, heart rate, steps, weight, and workouts into Health Connect.',
+        detail: 'Fitbit must keep writing steps, sleep, heart rate, weight, and workouts into the phone-side health source.',
       },
       {
-        step: 'LifeOS capture layer',
+        step: 'LifeOS phone capture layer',
         status: 'Build next',
-        detail: 'LifeOS needs either an Android wrapper or a small companion sync service to read Health Connect data safely.',
+        detail: 'LifeOS still needs a true phone-first capture layer so it can ingest the same health data the phone already holds.',
       },
       {
-        step: 'Daily review flow',
+        step: 'Desktop mirror flow',
         status: 'Then',
-        detail: 'Imported signals should land in Sync Inbox first, then feed readiness, fasting review, and workout recovery.',
+        detail: 'Once phone sync is real, imported signals should land in Sync Inbox first, then feed readiness, fasting review, and workout recovery on every device.',
       },
     ],
     [],
@@ -2288,6 +2288,14 @@ function App() {
   const stepsMetric = syncMetrics.find((metric) => metric.label === 'Steps')
   const zoneMetric = syncMetrics.find((metric) => metric.label === 'Zone mins')
   const restingHrMetric = syncMetrics.find((metric) => metric.label === 'Resting HR')
+  const weightMetric = syncMetrics.find((metric) => metric.label === 'Weight')
+  const hasImportedPhoneMetric = Boolean(
+    sleepMetric?.value !== '—' ||
+      stepsMetric?.value !== '—' ||
+      zoneMetric?.value !== '—' ||
+      restingHrMetric?.value !== '—' ||
+      weightMetric?.value !== '—',
+  )
   const currentSteps = Number(String(stepsMetric?.value ?? '0').replace(/,/g, '')) || 0
   const stepGoalHit = currentSteps >= DAILY_STEP_GOAL
   const remainingSteps = Math.max(0, DAILY_STEP_GOAL - currentSteps)
@@ -3163,7 +3171,13 @@ function App() {
             <div className="sync-summary">
               <section className="sync-summary-card">
                 <span>Phone health source</span>
-                <strong>{fitbitBridge.connected ? 'Connected' : 'Not connected'}</strong>
+                <strong>
+                  {fitbitBridge.connected
+                    ? hasImportedPhoneMetric
+                      ? 'Connected and feeding data'
+                      : 'Connected, waiting for metrics'
+                    : 'Not connected'}
+                </strong>
                 <p>{fitbitMessage}</p>
                 <div className="fitbit-action-row">
                   <button type="button" className="fitbit-primary-button" onClick={connectFitbitBridge}>
@@ -3187,9 +3201,13 @@ function App() {
                 </p>
               </section>
               <section className="sync-summary-card">
-                <span>Recipe sync</span>
-                <strong>Ready to retest</strong>
-                <p>Current target is the LifeOS Recipes Notion database through the Vercel API bridge.</p>
+                <span>Phone sync result</span>
+                <strong>{hasImportedPhoneMetric ? 'Usable health data landed' : 'Auth worked, metrics still empty'}</strong>
+                <p>
+                  {hasImportedPhoneMetric
+                    ? 'The shared dashboard can now use real phone-side health values instead of placeholders.'
+                    : 'This usually means the current web bridge connected successfully, but your actual Fitbit or Health Connect metrics have not flowed through yet.'}
+                </p>
               </section>
             </div>
             <div className="metric-grid">
@@ -3217,9 +3235,11 @@ function App() {
               <div className="step-goal-meta">
                 <strong>{currentSteps.toLocaleString()}</strong>
                 <span>
-                  {stepGoalHit
-                    ? 'Google Health says the movement floor is done for today.'
-                    : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`}
+                  {hasImportedPhoneMetric
+                    ? stepGoalHit
+                      ? 'Phone health data says the movement floor is done for today.'
+                      : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`
+                    : 'Waiting for real phone step data before LifeOS can score today against the 10,000-step floor.'}
                 </span>
               </div>
             </section>
