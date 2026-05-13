@@ -2,7 +2,6 @@ import {
   Apple,
   Award,
   BookOpen,
-  CalendarDays,
   CheckCircle2,
   ChevronRight,
   CircleCheck,
@@ -3119,13 +3118,6 @@ function App() {
                 </li>
               ))}
             </ul>
-          </article>
-
-          <article className="panel compact-panel notion-panel">
-            <div className="panel-title">
-              <CalendarDays size={20} aria-hidden="true" />
-              <h2>Notion Backbone</h2>
-            </div>
           </article>
 
           <article id="progress" className="panel progress-panel">
