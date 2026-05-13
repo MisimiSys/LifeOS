@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRef } from 'react'
 import {
   DEFAULT_FASTING_PLAN,
@@ -42,6 +42,7 @@ import { fastingProgress } from './domain/lifeos'
 import {
   fetchLifeOsCloudState,
   hasSupabaseConfig,
+  subscribeToLifeOsCloudState,
   syncLifeOsCloudState,
   type CompletedFastRecordRow,
   type LiftProgressRow,
@@ -67,6 +68,7 @@ const LIFT_PROGRESS_STORAGE_KEY = 'lifeos.liftProgress'
 const RECIPES_STORAGE_KEY = 'lifeos.recipes'
 const MEAL_TIMELINE_STORAGE_KEY = 'lifeos.mealTimeline'
 const ACTIVE_CHALLENGE_STORAGE_KEY = 'lifeos.activeChallenge'
+const DAILY_STEP_GOAL = 10000
 const TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
   const totalMinutes = index * 5
   const hours = `${Math.floor(totalMinutes / 60)}`.padStart(2, '0')
@@ -1222,6 +1224,8 @@ function App() {
     hasSupabaseConfig ? 'Cloud sync ready. Loading shared LifeOS data.' : 'Cloud sync not configured. Using local device storage.',
   )
   const hasHydratedCloudState = useRef(false)
+  const isApplyingCloudState = useRef(false)
+  const cloudHydrationInFlight = useRef(false)
   const mealEditorRef = useRef<HTMLFormElement | null>(null)
   const recipeEditorRef = useRef<HTMLFormElement | null>(null)
   const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
@@ -1577,60 +1581,99 @@ function App() {
     })
   }, [editingRecipeId])
 
+  const hydrateCloudState = useCallback(
+    async (mode: 'initial' | 'refresh' = 'refresh') => {
+      if (!hasSupabaseConfig || cloudHydrationInFlight.current) return
+
+      cloudHydrationInFlight.current = true
+
+      try {
+        const cloudState = await fetchLifeOsCloudState()
+        if (!cloudState) return
+
+        const cloudHasAnyRows =
+          cloudState.fastingSessions.length > 0 ||
+          cloudState.workoutLogs.length > 0 ||
+          cloudState.mealTimelines.length > 0 ||
+          cloudState.recipes.length > 0 ||
+          cloudState.liftProgress.length > 0
+
+        if (mode === 'initial' && !cloudHasAnyRows) {
+          setCloudSyncMessage('Cloud sync active. Waiting for first shared LifeOS changes.')
+          return
+        }
+
+        isApplyingCloudState.current = true
+
+        setFastingHistory(cloudState.fastingSessions.map(fastingRowToRecord))
+        setWorkoutLog(cloudState.workoutLogs.map(workoutRowToEntry))
+        setMealTimelineByDate(rowsToMealTimelineMap(cloudState.mealTimelines))
+        setRecipes(cloudState.recipes.map(rowToRecipe))
+        setLiftProgress(
+          cloudState.liftProgress.length > 0
+            ? rowsToLiftProgressMap(cloudState.liftProgress)
+            : DEFAULT_LIFT_PROGRESS,
+        )
+
+        window.setTimeout(() => {
+          isApplyingCloudState.current = false
+        }, 0)
+
+        setCloudSyncMessage('Cloud sync active. Mobile and desktop can now share the same LifeOS data.')
+      } catch (error) {
+        isApplyingCloudState.current = false
+        const message = error instanceof Error ? error.message : 'Unknown cloud sync error'
+        setCloudSyncMessage(`Cloud sync could not load: ${message}`)
+      } finally {
+        hasHydratedCloudState.current = true
+        cloudHydrationInFlight.current = false
+      }
+    },
+    [],
+  )
+
   useEffect(() => {
     if (!hasSupabaseConfig) {
       hasHydratedCloudState.current = true
       return
     }
 
-    let cancelled = false
+    const initialLoadId = window.setTimeout(() => {
+      void hydrateCloudState('initial')
+    }, 0)
 
-    async function hydrateCloudState() {
-      try {
-        const cloudState = await fetchLifeOsCloudState()
-        if (!cloudState || cancelled) return
+    const stopSubscription = subscribeToLifeOsCloudState(() => {
+      void hydrateCloudState('refresh')
+    })
 
-        if (cloudState.fastingSessions.length > 0) {
-          setFastingHistory(cloudState.fastingSessions.map(fastingRowToRecord))
-        }
+    const pollId = window.setInterval(() => {
+      void hydrateCloudState('refresh')
+    }, 15000)
 
-        if (cloudState.workoutLogs.length > 0) {
-          setWorkoutLog(cloudState.workoutLogs.map(workoutRowToEntry))
-        }
-
-        if (cloudState.mealTimelines.length > 0) {
-          setMealTimelineByDate(rowsToMealTimelineMap(cloudState.mealTimelines))
-        }
-
-        if (cloudState.recipes.length > 0) {
-          setRecipes(cloudState.recipes.map(rowToRecipe))
-        }
-
-        if (cloudState.liftProgress.length > 0) {
-          setLiftProgress((current) => ({
-            ...current,
-            ...rowsToLiftProgressMap(cloudState.liftProgress),
-          }))
-        }
-
-        setCloudSyncMessage('Cloud sync active. Mobile and desktop can now share the same LifeOS data.')
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown cloud sync error'
-        setCloudSyncMessage(`Cloud sync could not load: ${message}`)
-      } finally {
-        if (!cancelled) hasHydratedCloudState.current = true
+    const handleVisibilitySync = () => {
+      if (document.visibilityState === 'visible') {
+        void hydrateCloudState('refresh')
       }
     }
 
-    void hydrateCloudState()
+    const handleFocusSync = () => {
+      void hydrateCloudState('refresh')
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilitySync)
+    window.addEventListener('focus', handleFocusSync)
 
     return () => {
-      cancelled = true
+      window.clearTimeout(initialLoadId)
+      stopSubscription()
+      window.clearInterval(pollId)
+      document.removeEventListener('visibilitychange', handleVisibilitySync)
+      window.removeEventListener('focus', handleFocusSync)
     }
-  }, [])
+  }, [hydrateCloudState])
 
   useEffect(() => {
-    if (!hasSupabaseConfig || !hasHydratedCloudState.current) return
+    if (!hasSupabaseConfig || !hasHydratedCloudState.current || isApplyingCloudState.current) return
 
     let cancelled = false
 
@@ -1989,6 +2032,11 @@ function App() {
   const stepsMetric = syncMetrics.find((metric) => metric.label === 'Steps')
   const zoneMetric = syncMetrics.find((metric) => metric.label === 'Zone mins')
   const restingHrMetric = syncMetrics.find((metric) => metric.label === 'Resting HR')
+  const currentSteps = Number(String(stepsMetric?.value ?? '0').replace(/,/g, '')) || 0
+  const stepGoalHit = currentSteps >= DAILY_STEP_GOAL
+  const remainingSteps = Math.max(0, DAILY_STEP_GOAL - currentSteps)
+  const stepGoalProgress = Math.min(100, Math.round((currentSteps / DAILY_STEP_GOAL) * 100))
+  const formattedStepGoal = DAILY_STEP_GOAL.toLocaleString()
   const recoverySignal = useMemo(() => {
     const workoutStatus = loggedWorkoutForSelectedDay?.status ?? null
 
@@ -2123,16 +2171,20 @@ function App() {
       role: 'sync',
       label: 'Readiness signals',
       value: syncStatusLabel,
-      detail: `${syncMetrics.length} Fitbit and Health Connect markers feeding the daily view.`,
-      trend: hasSupabaseConfig ? 'good' : 'watch',
+      detail: stepGoalHit
+        ? `Step floor cleared through your Fitbit movement signal.`
+        : `${remainingSteps.toLocaleString()} steps left to hit the ${formattedStepGoal}-step floor.`,
+      trend: hasSupabaseConfig ? (stepGoalHit ? 'good' : 'neutral') : 'watch',
       targetId: 'sync' as const,
       eyebrow: 'Fitbit / Health Connect',
       metrics: [
         { label: 'Sleep', value: sleepMetric ? `${sleepMetric.value}${sleepMetric.unit ?? ''}` : '--' },
-        { label: 'Steps', value: stepsMetric?.value ?? '--' },
+        { label: 'Steps', value: currentSteps > 0 ? currentSteps.toLocaleString() : '--' },
         { label: 'Zone', value: zoneMetric?.value ?? '--' },
       ],
-      cta: restingHrMetric ? `Resting HR is ${restingHrMetric.value}${restingHrMetric.unit ?? ''}.` : 'Health signals will stage here.',
+      cta: stepGoalHit
+        ? `Daily movement floor achieved. ${restingHrMetric ? `Resting HR is ${restingHrMetric.value}${restingHrMetric.unit ?? ''}.` : ''}`.trim()
+        : `Fitbit watch data is now the cleanest way to verify whether today reaches your step minimum.`,
     },
   ] as const
 
@@ -2877,6 +2929,26 @@ function App() {
                 </div>
               ))}
             </div>
+            <section className={`step-goal-card ${stepGoalHit ? 'step-goal-hit' : 'step-goal-chasing'}`}>
+              <div className="step-goal-head">
+                <div>
+                  <span>Daily step floor</span>
+                  <strong>{formattedStepGoal} steps</strong>
+                </div>
+                <p>{stepGoalHit ? 'Achieved' : 'In progress'}</p>
+              </div>
+              <div className="step-goal-progress" aria-hidden="true">
+                <div className="step-goal-fill" style={{ width: `${stepGoalProgress}%` }} />
+              </div>
+              <div className="step-goal-meta">
+                <strong>{currentSteps.toLocaleString()}</strong>
+                <span>
+                  {stepGoalHit
+                    ? 'Fitbit says the movement floor is done for today.'
+                    : `${remainingSteps.toLocaleString()} more steps needed to close the gap.`}
+                </span>
+              </div>
+            </section>
             <div className="health-connect-panel">
               <div className="health-connect-header">
                 <h3>Health Connect Path</h3>

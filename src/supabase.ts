@@ -66,21 +66,41 @@ export const supabase = hasSupabaseConfig
     })
   : null
 
-async function replaceTable<RowType extends Record<string, unknown>>(
+async function syncTable<RowType extends Record<string, unknown>>(
   table: string,
   rows: RowType[],
   keyColumn: string,
 ) {
   if (!supabase) return
 
-  const deleteQuery = supabase.from(table).delete().not(keyColumn, 'is', null)
-  const { error: deleteError } = await deleteQuery
-  if (deleteError) throw deleteError
+  const { data: existingRows, error: existingError } = await supabase.from(table).select(keyColumn)
+  if (existingError) throw existingError
 
-  if (rows.length === 0) return
+  const incomingKeys = new Set(
+    rows
+      .map((row) => row[keyColumn])
+      .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number'),
+  )
 
-  const { error: insertError } = await supabase.from(table).insert(rows as never)
-  if (insertError) throw insertError
+  const staleKeys = ((existingRows ?? []) as unknown as Array<Record<string, unknown>>)
+    .map((row) => row[keyColumn])
+    .filter(
+      (value): value is string | number =>
+        (typeof value === 'string' || typeof value === 'number') && !incomingKeys.has(value),
+    )
+
+  if (rows.length > 0) {
+    const { error: upsertError } = await supabase.from(table).upsert(rows as never, {
+      onConflict: keyColumn,
+      ignoreDuplicates: false,
+    })
+    if (upsertError) throw upsertError
+  }
+
+  if (staleKeys.length > 0) {
+    const { error: deleteError } = await supabase.from(table).delete().in(keyColumn, staleKeys)
+    if (deleteError) throw deleteError
+  }
 }
 
 export async function fetchLifeOsCloudState() {
@@ -118,10 +138,27 @@ export async function syncLifeOsCloudState(input: {
   if (!supabase) return
 
   await Promise.all([
-    replaceTable('fasting_sessions', input.fastingSessions, 'id'),
-    replaceTable('workout_logs', input.workoutLogs, 'id'),
-    replaceTable('meal_timelines', input.mealTimelines, 'id'),
-    replaceTable('recipes', input.recipes, 'id'),
-    replaceTable('lift_progress', input.liftProgress, 'label'),
+    syncTable('fasting_sessions', input.fastingSessions, 'id'),
+    syncTable('workout_logs', input.workoutLogs, 'id'),
+    syncTable('meal_timelines', input.mealTimelines, 'id'),
+    syncTable('recipes', input.recipes, 'id'),
+    syncTable('lift_progress', input.liftProgress, 'label'),
   ])
+}
+
+export function subscribeToLifeOsCloudState(onChange: () => void) {
+  if (!supabase) return () => {}
+
+  const channel = supabase
+    .channel('lifeos-cloud-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'fasting_sessions' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'workout_logs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'meal_timelines' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'lift_progress' }, onChange)
+    .subscribe()
+
+  return () => {
+    void supabase.removeChannel(channel)
+  }
 }
