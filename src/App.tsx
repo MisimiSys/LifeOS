@@ -1289,7 +1289,7 @@ function App() {
   const [workoutLog, setWorkoutLog] = useState(storedWorkoutLogInitialValue)
   const [liftProgress, setLiftProgress] = useState(storedLiftProgressInitialValue)
   const [mealTimelineByDate, setMealTimelineByDate] = useState(storedMealTimelineInitialValue)
-  const [mealRecipeTab, setMealRecipeTab] = useState<'timeline' | 'recipes'>('timeline')
+  const [mealRecipeTab, setMealRecipeTab] = useState<'timeline' | 'recipes' | 'command'>('timeline')
   const [recipeFilter, setRecipeFilter] = useState<(typeof RECIPE_FILTERS)[number]>('All')
   const [recipes, setRecipes] = useState(storedRecipesInitialValue)
   const [editingMealId, setEditingMealId] = useState<string | null>(null)
@@ -2696,10 +2696,6 @@ function App() {
             <Utensils size={18} aria-hidden="true" />
             Nutrition
           </a>
-          <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
-            <BookOpen size={18} aria-hidden="true" />
-            Recipes
-          </a>
           <a href="#fitness">
             <Dumbbell size={18} aria-hidden="true" />
             Fitness
@@ -2737,10 +2733,6 @@ function App() {
         <a href="#meals" onClick={() => setMealRecipeTab('timeline')}>
           <Utensils size={21} aria-hidden="true" />
           Nutrition
-        </a>
-        <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
-          <BookOpen size={21} aria-hidden="true" />
-          Recipes
         </a>
         <a href="#fitness">
           <Dumbbell size={21} aria-hidden="true" />
@@ -3203,22 +3195,6 @@ function App() {
               <Apple size={20} aria-hidden="true" />
               <h2>Nutrition</h2>
             </div>
-            <div className="nutrition-command-strip" aria-label="Nutrition command">
-              {nutritionHighlights.map((item) => (
-                <section className="nutrition-chip" key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </section>
-              ))}
-            </div>
-            <div className="nutrition-rule-grid nutrition-rule-grid-embedded nutrition-rule-grid-inline">
-              {nutritionRules.map((rule) => (
-                <section className={`nutrition-rule ${rule.label === 'Avoid' ? 'nutrition-avoid' : ''}`} key={rule.label}>
-                  <span>{rule.label}</span>
-                  <strong>{rule.value}</strong>
-                </section>
-              ))}
-            </div>
             <div className="meal-recipe-tabs" aria-label="Nutrition sections">
               <button
                 type="button"
@@ -3233,6 +3209,13 @@ function App() {
                 onClick={() => setMealRecipeTab('recipes')}
               >
                 Recipes
+              </button>
+              <button
+                type="button"
+                className={mealRecipeTab === 'command' ? 'active' : ''}
+                onClick={() => setMealRecipeTab('command')}
+              >
+                Command
               </button>
             </div>
             {mealRecipeTab === 'timeline' ? (
@@ -3275,7 +3258,7 @@ function App() {
                   ))}
                 </div>
               </>
-            ) : (
+            ) : mealRecipeTab === 'recipes' ? (
               <>
                 <p className="recipe-sync-note">{recipeSyncMessage}</p>
                 <div className="recipe-action-row">
@@ -3327,6 +3310,25 @@ function App() {
                         <Pencil size={14} aria-hidden="true" />
                         Edit
                       </button>
+                    </section>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="nutrition-command-strip" aria-label="Nutrition command">
+                  {nutritionHighlights.map((item) => (
+                    <section className="nutrition-chip" key={item.label}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </section>
+                  ))}
+                </div>
+                <div className="nutrition-rule-grid nutrition-rule-grid-embedded nutrition-rule-grid-inline">
+                  {nutritionRules.map((rule) => (
+                    <section className={`nutrition-rule ${rule.label === 'Avoid' ? 'nutrition-avoid' : ''}`} key={rule.label}>
+                      <span>{rule.label}</span>
+                      <strong>{rule.value}</strong>
                     </section>
                   ))}
                 </div>
