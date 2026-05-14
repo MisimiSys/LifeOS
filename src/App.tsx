@@ -58,11 +58,20 @@ const NOTION_LIFEOS_URL =
 const LEARNING_PORTAL_URL = 'https://misimisys.github.io/portal/'
 const DEFAULT_NOTION_SYNC_ENDPOINT = 'https://life-os-lac-pi.vercel.app/api/recipes/upsert'
 const DEFAULT_HEALTH_BRIDGE_BASE = 'https://life-os-lac-pi.vercel.app'
-const NOTION_SYNC_ENDPOINT = import.meta.env.VITE_LIFEOS_SYNC_API_URL ?? DEFAULT_NOTION_SYNC_ENDPOINT
+function resolveConfiguredUrl(value: string | undefined, fallback: string) {
+  const normalized = value?.trim()
+  return normalized ? normalized : fallback
+}
+
+const NOTION_SYNC_ENDPOINT = resolveConfiguredUrl(
+  import.meta.env.VITE_LIFEOS_SYNC_API_URL,
+  DEFAULT_NOTION_SYNC_ENDPOINT,
+)
 const HEALTH_BRIDGE_BASE =
-  import.meta.env.VITE_LIFEOS_HEALTH_API_BASE ??
-  import.meta.env.VITE_LIFEOS_FITBIT_API_BASE ??
-  DEFAULT_HEALTH_BRIDGE_BASE
+  resolveConfiguredUrl(
+    import.meta.env.VITE_LIFEOS_HEALTH_API_BASE,
+    resolveConfiguredUrl(import.meta.env.VITE_LIFEOS_FITBIT_API_BASE, DEFAULT_HEALTH_BRIDGE_BASE),
+  )
 const HEALTH_STATUS_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/status`
 const HEALTH_CONNECT_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/connect`
 const HEALTH_SYNC_ENDPOINT = `${HEALTH_BRIDGE_BASE}/api/health/sync`
