@@ -1244,6 +1244,35 @@ h3 {
   margin-top: 16px;
 }
 
+.meal-recipe-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+  padding: 6px;
+  border: 1px solid rgba(23, 32, 29, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.meal-recipe-tabs button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #5d6d67;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.meal-recipe-tabs button.active {
+  background: #ffffff;
+  color: #1b5e59;
+  box-shadow: 0 1px 2px rgba(23, 32, 29, 0.08);
+}
+
 .meal-actions button,
 .meal-row-actions button {
   min-height: 38px;
@@ -3269,6 +3298,15 @@ h3 {
   .meal-actions,
   .meal-row-actions {
     display: grid;
+  }
+
+  .meal-recipe-tabs {
+    width: 100%;
+  }
+
+  .meal-recipe-tabs button {
+    padding-inline: 10px;
+    font-size: 14px;
   }
 
   .challenge-card-actions,

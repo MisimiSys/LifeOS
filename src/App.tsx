@@ -1280,6 +1280,7 @@ function App() {
   const [workoutLog, setWorkoutLog] = useState(storedWorkoutLogInitialValue)
   const [liftProgress, setLiftProgress] = useState(storedLiftProgressInitialValue)
   const [mealTimelineByDate, setMealTimelineByDate] = useState(storedMealTimelineInitialValue)
+  const [mealRecipeTab, setMealRecipeTab] = useState<'timeline' | 'recipes'>('timeline')
   const [recipeFilter, setRecipeFilter] = useState<(typeof RECIPE_FILTERS)[number]>('All')
   const [recipes, setRecipes] = useState(storedRecipesInitialValue)
   const [editingMealId, setEditingMealId] = useState<string | null>(null)
@@ -2588,11 +2589,11 @@ function App() {
             <TimerReset size={18} aria-hidden="true" />
             Fasting
           </a>
-          <a href="#meals">
+          <a href="#meals" onClick={() => setMealRecipeTab('timeline')}>
             <Utensils size={18} aria-hidden="true" />
             Meals
           </a>
-          <a href="#recipes">
+          <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
             <BookOpen size={18} aria-hidden="true" />
             Recipes
           </a>
@@ -2630,11 +2631,11 @@ function App() {
           <TimerReset size={21} aria-hidden="true" />
           Fasting
         </a>
-        <a href="#meals">
+        <a href="#meals" onClick={() => setMealRecipeTab('timeline')}>
           <Utensils size={21} aria-hidden="true" />
           Meals
         </a>
-        <a href="#recipes">
+        <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
           <BookOpen size={21} aria-hidden="true" />
           Recipes
         </a>
@@ -3079,45 +3080,121 @@ function App() {
           <article id="meals" className="panel meals-panel">
             <div className="panel-title">
               <Apple size={20} aria-hidden="true" />
-              <h2>Meal Timeline</h2>
+              <h2>Meals</h2>
             </div>
-            <div className="meal-actions">
-              <button type="button" onClick={() => openMealEditor()}>
-                <Plus size={16} aria-hidden="true" />
-                Add meal slot
+            <div className="meal-recipe-tabs" aria-label="Meals and recipes">
+              <button
+                type="button"
+                className={mealRecipeTab === 'timeline' ? 'active' : ''}
+                onClick={() => setMealRecipeTab('timeline')}
+              >
+                Meal Timeline
               </button>
-              <button type="button" onClick={resetMealsForDate} disabled={!mealTimelineByDate[selectedDate]}>
-                Reset this day
+              <button
+                type="button"
+                className={mealRecipeTab === 'recipes' ? 'active' : ''}
+                onClick={() => setMealRecipeTab('recipes')}
+              >
+                Recipes
               </button>
             </div>
-            <div className="meal-stack">
-              {displayedMeals.map((meal) => (
-                <section className={`meal-row carb-${meal.carbSignal.toLowerCase()}`} key={meal.id}>
-                  <div className="meal-time">
-                    <strong>{meal.time || 'Flexible'}</strong>
-                    <span>{meal.role}</span>
-                  </div>
-                  <div>
-                    <div className="meal-heading">
-                      <h3>{meal.title}</h3>
-                      <span>{meal.status}</span>
-                    </div>
-                    <p>{meal.items.join(', ')}</p>
-                    {meal.budgetBackup ? <small>{meal.budgetBackup}</small> : null}
-                    <div className="meal-row-actions">
-                      <button type="button" onClick={() => openMealEditor(meal)}>
+            {mealRecipeTab === 'timeline' ? (
+              <>
+                <div className="meal-actions">
+                  <button type="button" onClick={() => openMealEditor()}>
+                    <Plus size={16} aria-hidden="true" />
+                    Add meal slot
+                  </button>
+                  <button type="button" onClick={resetMealsForDate} disabled={!mealTimelineByDate[selectedDate]}>
+                    Reset this day
+                  </button>
+                </div>
+                <div className="meal-stack">
+                  {displayedMeals.map((meal) => (
+                    <section className={`meal-row carb-${meal.carbSignal.toLowerCase()}`} key={meal.id}>
+                      <div className="meal-time">
+                        <strong>{meal.time || 'Flexible'}</strong>
+                        <span>{meal.role}</span>
+                      </div>
+                      <div>
+                        <div className="meal-heading">
+                          <h3>{meal.title}</h3>
+                          <span>{meal.status}</span>
+                        </div>
+                        <p>{meal.items.join(', ')}</p>
+                        {meal.budgetBackup ? <small>{meal.budgetBackup}</small> : null}
+                        <div className="meal-row-actions">
+                          <button type="button" onClick={() => openMealEditor(meal)}>
+                            <Pencil size={14} aria-hidden="true" />
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => deleteMeal(meal.id)}>
+                            <Trash2 size={14} aria-hidden="true" />
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="recipe-sync-note">{recipeSyncMessage}</p>
+                <div className="recipe-action-row">
+                  <button type="button" onClick={() => openRecipeEditor()}>
+                    <Plus size={16} aria-hidden="true" />
+                    Custom recipe
+                  </button>
+                  <button type="button" onClick={() => void syncRecipesToNotion(recipes)} disabled={isRecipeSyncing}>
+                    <Database size={16} aria-hidden="true" />
+                    {isRecipeSyncing ? 'Syncing...' : 'Sync Notion'}
+                  </button>
+                  <button type="button" onClick={copyRecipesForNotion}>
+                    <Database size={16} aria-hidden="true" />
+                    Copy Notion update
+                  </button>
+                </div>
+                <div className="recipe-filter-row" aria-label="Recipe filter">
+                  {RECIPE_FILTERS.map((filter) => (
+                    <button
+                      className={recipeFilter === filter ? 'active' : ''}
+                      type="button"
+                      key={filter}
+                      onClick={() => setRecipeFilter(filter)}
+                    >
+                      <span>{filter}</span>
+                      <strong>{recipeCounts[filter]}</strong>
+                    </button>
+                  ))}
+                </div>
+                <div className="recipe-grid">
+                  {filteredRecipes.map((recipe) => (
+                    <section className={`recipe-card recipe-${recipe.carbSignal.toLowerCase()}`} key={recipe.title}>
+                      <div className="recipe-card-top">
+                        <span>{recipe.tag}</span>
+                        <strong>{recipe.carbSignal}</strong>
+                      </div>
+                      <h3>{recipe.title}</h3>
+                      <p>{recipe.base}</p>
+                      <small>{recipe.protein}</small>
+                      <small>{recipe.vehicle}</small>
+                      <div className="recipe-advisory-list">
+                        {buildRecipeAdvisory(recipe).map((advisory) => (
+                          <small className="recipe-advisory" key={advisory}>
+                            {advisory}
+                          </small>
+                        ))}
+                      </div>
+                      <button className="recipe-edit-button" type="button" onClick={() => openRecipeEditor(recipe)}>
                         <Pencil size={14} aria-hidden="true" />
                         Edit
                       </button>
-                      <button type="button" onClick={() => deleteMeal(meal.id)}>
-                        <Trash2 size={14} aria-hidden="true" />
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              ))}
-            </div>
+                    </section>
+                  ))}
+                </div>
+              </>
+            )}
           </article>
 
           <article id="nutrition" className="panel nutrition-command-panel">
@@ -3185,66 +3262,6 @@ function App() {
               Portal monthly challenges
               <ExternalLink size={14} aria-hidden="true" />
             </a>
-          </article>
-
-          <article id="recipes" className="panel recipes-panel">
-            <div className="panel-title">
-              <BookOpen size={20} aria-hidden="true" />
-              <h2>Recipes</h2>
-            </div>
-            <p className="recipe-sync-note">{recipeSyncMessage}</p>
-            <div className="recipe-action-row">
-              <button type="button" onClick={() => openRecipeEditor()}>
-                <Plus size={16} aria-hidden="true" />
-                Custom recipe
-              </button>
-              <button type="button" onClick={() => void syncRecipesToNotion(recipes)} disabled={isRecipeSyncing}>
-                <Database size={16} aria-hidden="true" />
-                {isRecipeSyncing ? 'Syncing...' : 'Sync Notion'}
-              </button>
-              <button type="button" onClick={copyRecipesForNotion}>
-                <Database size={16} aria-hidden="true" />
-                Copy Notion update
-              </button>
-            </div>
-            <div className="recipe-filter-row" aria-label="Recipe filter">
-              {RECIPE_FILTERS.map((filter) => (
-                <button
-                  className={recipeFilter === filter ? 'active' : ''}
-                  type="button"
-                  key={filter}
-                  onClick={() => setRecipeFilter(filter)}
-                >
-                  <span>{filter}</span>
-                  <strong>{recipeCounts[filter]}</strong>
-                </button>
-              ))}
-            </div>
-            <div className="recipe-grid">
-              {filteredRecipes.map((recipe) => (
-                <section className={`recipe-card recipe-${recipe.carbSignal.toLowerCase()}`} key={recipe.title}>
-                  <div className="recipe-card-top">
-                    <span>{recipe.tag}</span>
-                    <strong>{recipe.carbSignal}</strong>
-                  </div>
-                  <h3>{recipe.title}</h3>
-                  <p>{recipe.base}</p>
-                  <small>{recipe.protein}</small>
-                  <small>{recipe.vehicle}</small>
-                  <div className="recipe-advisory-list">
-                    {buildRecipeAdvisory(recipe).map((advisory) => (
-                      <small className="recipe-advisory" key={advisory}>
-                        {advisory}
-                      </small>
-                    ))}
-                  </div>
-                  <button className="recipe-edit-button" type="button" onClick={() => openRecipeEditor(recipe)}>
-                    <Pencil size={14} aria-hidden="true" />
-                    Edit
-                  </button>
-                </section>
-              ))}
-            </div>
           </article>
 
           <article id="me" className="panel compact-panel priorities-panel">
