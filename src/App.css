@@ -86,6 +86,45 @@ nav a:hover {
 
 .workspace {
   padding: 30px;
+  overscroll-behavior-y: contain;
+}
+
+.workspace.workspace-refreshing {
+  pointer-events: none;
+}
+
+.pull-refresh-indicator {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  transition:
+    height 160ms ease,
+    opacity 160ms ease;
+}
+
+.pull-refresh-indicator span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 136px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  padding: 0 14px;
+  border: 1px solid rgba(27, 94, 89, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.92);
+  color: #4f6c68;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.pull-refresh-indicator.ready span,
+.pull-refresh-indicator.refreshing span {
+  color: #1b5e59;
+  border-color: rgba(27, 94, 89, 0.2);
+  background: rgba(233, 250, 244, 0.94);
 }
 
 .mobile-tabbar {
@@ -3214,6 +3253,13 @@ h3 {
     flex-direction: column;
     gap: 12px;
     padding: 10px 12px 96px;
+  }
+
+  .pull-refresh-indicator span {
+    min-width: 132px;
+    min-height: 32px;
+    margin-bottom: 6px;
+    font-size: 12px;
   }
 
   .topbar {

@@ -1307,11 +1307,15 @@ function App() {
   })
   const [, setFitbitMessage] = useState('Phone health bridge not connected yet.')
   const [isFitbitSyncing, setIsFitbitSyncing] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false)
   const hasHydratedCloudState = useRef(false)
   const isApplyingCloudState = useRef(false)
   const cloudHydrationInFlight = useRef(false)
   const mealEditorRef = useRef<HTMLFormElement | null>(null)
   const recipeEditorRef = useRef<HTMLFormElement | null>(null)
+  const pullStartY = useRef<number | null>(null)
+  const pullActive = useRef(false)
   const usesNativePhoneShell = useMemo(() => isNativePhoneShell(), [])
   const storedCustomPlan = useMemo(() => storedCustomPlanInitialValue(), [])
   const [customFastingHours, setCustomFastingHours] = useState(storedCustomPlan.fastingHours)
@@ -1984,7 +1988,7 @@ function App() {
     }
   }, [loadFitbitBridgeStatus])
 
-  async function syncFitbitBridgeNow() {
+  const syncFitbitBridgeNow = useCallback(async () => {
     setIsFitbitSyncing(true)
     try {
       if (usesNativePhoneShell) {
@@ -2025,6 +2029,38 @@ function App() {
     } finally {
       setIsFitbitSyncing(false)
     }
+  }, [usesNativePhoneShell])
+
+  const refreshDashboard = useCallback(async () => {
+    if (isPullRefreshing) return
+
+    setIsPullRefreshing(true)
+
+    try {
+      if (usesNativePhoneShell && fitbitBridge.nativePermissionsGranted) {
+        await syncFitbitBridgeNow()
+      } else {
+        await loadFitbitBridgeStatus()
+      }
+
+      if (hasSupabaseConfig) {
+        await hydrateCloudState('refresh')
+      }
+    } finally {
+      setPullDistance(0)
+      window.setTimeout(() => setIsPullRefreshing(false), 120)
+    }
+  }, [
+    fitbitBridge.nativePermissionsGranted,
+    hydrateCloudState,
+    isPullRefreshing,
+    loadFitbitBridgeStatus,
+    syncFitbitBridgeNow,
+    usesNativePhoneShell,
+  ])
+
+  function isWorkspaceScrolled() {
+    return Math.max(window.scrollY, document.documentElement.scrollTop, document.body.scrollTop) > 0
   }
 
   function connectFitbitBridge(event?: React.MouseEvent<HTMLButtonElement>) {
@@ -2071,6 +2107,51 @@ function App() {
         void loadFitbitBridgeStatus()
       }
     }, 2000)
+  }
+
+  function handleWorkspaceTouchStart(event: React.TouchEvent<HTMLElement>) {
+    if (isWorkspaceScrolled() || isPullRefreshing) {
+      pullStartY.current = null
+      pullActive.current = false
+      return
+    }
+
+    pullStartY.current = event.touches[0]?.clientY ?? null
+    pullActive.current = true
+  }
+
+  function handleWorkspaceTouchMove(event: React.TouchEvent<HTMLElement>) {
+    if (!pullActive.current || pullStartY.current === null || isPullRefreshing) return
+
+    const currentY = event.touches[0]?.clientY ?? pullStartY.current
+    const delta = currentY - pullStartY.current
+
+    if (delta <= 0 || isWorkspaceScrolled()) {
+      setPullDistance(0)
+      return
+    }
+
+    setPullDistance(Math.min(delta * 0.42, 84))
+    event.preventDefault()
+  }
+
+  function handleWorkspaceTouchEnd() {
+    const shouldRefresh = pullDistance >= 54
+    pullStartY.current = null
+    pullActive.current = false
+
+    if (shouldRefresh) {
+      void refreshDashboard()
+      return
+    }
+
+    setPullDistance(0)
+  }
+
+  function handleWorkspaceTouchCancel() {
+    pullStartY.current = null
+    pullActive.current = false
+    setPullDistance(0)
   }
 
   function handleFastAction() {
@@ -2653,7 +2734,25 @@ function App() {
         </a>
       </nav>
 
-      <section className="workspace">
+      <section
+        className={`workspace${isPullRefreshing ? ' workspace-refreshing' : ''}`}
+        onTouchStart={handleWorkspaceTouchStart}
+        onTouchMove={handleWorkspaceTouchMove}
+        onTouchEnd={handleWorkspaceTouchEnd}
+        onTouchCancel={handleWorkspaceTouchCancel}
+      >
+        <div
+          className={`pull-refresh-indicator${pullDistance >= 54 ? ' ready' : ''}${isPullRefreshing ? ' refreshing' : ''}`}
+          style={{
+            height: `${Math.min(pullDistance, 72)}px`,
+            opacity: pullDistance > 0 || isPullRefreshing ? 1 : 0,
+          }}
+          aria-hidden="true"
+        >
+          <span>
+            {isPullRefreshing ? 'Refreshing...' : pullDistance >= 54 ? 'Release to refresh' : 'Pull to refresh'}
+          </span>
+        </div>
         <header className="topbar">
           <div>
             <span className="eyebrow">Lifelong rhythm</span>
