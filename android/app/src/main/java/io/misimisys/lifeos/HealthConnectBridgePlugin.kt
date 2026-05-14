@@ -11,6 +11,7 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -39,6 +40,10 @@ import kotlin.math.roundToInt
 @CapacitorPlugin(name = "HealthConnectBridge")
 class HealthConnectBridgePlugin : Plugin() {
     private val providerPackageName = "com.google.android.apps.healthdata"
+    private val preferredDataOrigins = setOf(
+        "com.fitbit.FitbitMobile",
+        "com.fitbit.fitbitmobile",
+    )
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val requiredPermissions = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
@@ -277,12 +282,23 @@ class HealthConnectBridgePlugin : Plugin() {
             .map { Duration.between(it.startTime, it.endTime).toMinutes().toInt() }
             .sum()
 
-        val rawStepTotal = stepRecords.sumOf { it.count.toLong() }.takeIf { it > 0 }?.toInt()
-        val rawDistanceKm = distanceRecords.sumOf { it.distance.inKilometers }.takeIf { it > 0.0 }
-        val rawCalories = calorieRecords
+        val preferredStepRecords = preferOrigins(stepRecords)
+        val preferredDistanceRecords = preferOrigins(distanceRecords)
+        val preferredCalorieRecords = preferOrigins(calorieRecords)
+        val preferredWorkoutSessions = preferOrigins(exerciseSessions)
+        val preferredRestingHeartRateRecords = preferOrigins(restingHeartRateRecords)
+        val preferredWeightRecords = preferOrigins(weightRecords)
+
+        val rawStepTotal = preferredStepRecords.sumOf { it.count.toLong() }.takeIf { it > 0 }?.toInt()
+        val rawDistanceKm = preferredDistanceRecords.sumOf { it.distance.inKilometers }.takeIf { it > 0.0 }
+        val rawCalories = preferredCalorieRecords
             .sumOf { it.energy.inKilocalories }
             .takeIf { it > 0.0 }
             ?.roundToInt()
+
+        val preferredWorkoutMinutes = preferredWorkoutSessions
+            .map { Duration.between(it.startTime, it.endTime).toMinutes().toInt() }
+            .sum()
 
         val aggregateSteps = aggregate[StepsRecord.COUNT_TOTAL]?.toInt()
         val aggregateDistanceKm = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inKilometers
@@ -293,13 +309,13 @@ class HealthConnectBridgePlugin : Plugin() {
             source = "Phone Health Sync",
             sleepHours = totalSleepHours,
             sleepScore = null,
-            restingHeartRate = restingHeartRateRecords.firstOrNull()?.beatsPerMinute?.toDouble()?.roundToInt(),
+            restingHeartRate = preferredRestingHeartRateRecords.firstOrNull()?.beatsPerMinute?.toDouble()?.roundToInt(),
             steps = maxOf(aggregateSteps ?: 0, rawStepTotal ?: 0),
-            activeZoneMinutes = totalWorkoutMinutes,
+            activeZoneMinutes = preferredWorkoutMinutes,
             caloriesBurned = maxOf(aggregateCalories ?: 0, rawCalories ?: 0),
             distanceKm = maxOf(aggregateDistanceKm ?: 0.0, rawDistanceKm ?: 0.0),
-            workoutMinutes = totalWorkoutMinutes,
-            weightKg = weightRecords.firstOrNull()?.weight?.inKilograms,
+            workoutMinutes = preferredWorkoutMinutes,
+            weightKg = preferredWeightRecords.firstOrNull()?.weight?.inKilograms,
         )
     }
 
@@ -355,6 +371,13 @@ class HealthConnectBridgePlugin : Plugin() {
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "update_required"
             else -> "unavailable"
         }
+    }
+
+    private fun <T : Record> preferOrigins(records: List<T>): List<T> {
+        val preferred = records.filter { record ->
+            preferredDataOrigins.contains(record.metadata.dataOrigin.packageName)
+        }
+        return if (preferred.isNotEmpty()) preferred else records
     }
 }
 
