@@ -2591,7 +2591,7 @@ function App() {
           </a>
           <a href="#meals" onClick={() => setMealRecipeTab('timeline')}>
             <Utensils size={18} aria-hidden="true" />
-            Meals
+            Nutrition
           </a>
           <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
             <BookOpen size={18} aria-hidden="true" />
@@ -2633,7 +2633,7 @@ function App() {
         </a>
         <a href="#meals" onClick={() => setMealRecipeTab('timeline')}>
           <Utensils size={21} aria-hidden="true" />
-          Meals
+          Nutrition
         </a>
         <a href="#meals" onClick={() => setMealRecipeTab('recipes')}>
           <BookOpen size={21} aria-hidden="true" />
