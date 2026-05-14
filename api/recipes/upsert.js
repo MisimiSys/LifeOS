@@ -1,5 +1,11 @@
 const NOTION_VERSION = '2022-06-28'
-const RECIPE_KEY_PROPERTY = process.env.NOTION_RECIPE_KEY_PROPERTY || 'LifeOS Key'
+
+function normalizedEnv(name, fallback = '') {
+  const value = process.env[name]
+  return typeof value === 'string' ? value.trim() : fallback
+}
+
+const RECIPE_KEY_PROPERTY = normalizedEnv('NOTION_RECIPE_KEY_PROPERTY', 'LifeOS Key')
 const FIELD_ENV_OVERRIDES = {
   title: process.env.NOTION_RECIPE_TITLE_PROPERTY,
   tag: process.env.NOTION_RECIPE_TYPE_PROPERTY,
@@ -269,10 +275,11 @@ function buildFilter(propertyName, property, value) {
 }
 
 async function notionRequest(path, init = {}) {
+  const notionToken = normalizedEnv('NOTION_TOKEN')
   const response = await fetch(`https://api.notion.com/v1${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${process.env.NOTION_TOKEN}`,
+      Authorization: `Bearer ${notionToken}`,
       'Content-Type': 'application/json',
       'Notion-Version': NOTION_VERSION,
       ...init.headers,
@@ -353,6 +360,8 @@ async function upsertRecipe(databaseId, recipe) {
 
 export default async function handler(request, response) {
   setCors(request, response)
+  const notionToken = normalizedEnv('NOTION_TOKEN')
+  const notionRecipesDatabaseId = normalizedEnv('NOTION_RECIPES_DATABASE_ID')
 
   if (request.method === 'OPTIONS') {
     response.statusCode = 204
@@ -365,7 +374,7 @@ export default async function handler(request, response) {
     return
   }
 
-  if (!process.env.NOTION_TOKEN || !process.env.NOTION_RECIPES_DATABASE_ID) {
+  if (!notionToken || !notionRecipesDatabaseId) {
     sendJson(response, 503, {
       error: 'Notion bridge is not configured',
       requiredEnv: ['NOTION_TOKEN', 'NOTION_RECIPES_DATABASE_ID'],
@@ -386,13 +395,13 @@ export default async function handler(request, response) {
 
     for (const recipe of recipes) {
       if (!recipe?.id || !recipe?.title) continue
-      results.push(await upsertRecipe(process.env.NOTION_RECIPES_DATABASE_ID, recipe))
+      results.push(await upsertRecipe(notionRecipesDatabaseId, recipe))
     }
 
     sendJson(response, 200, {
       ok: true,
       synced: results.length,
-      mapping: await getDatabaseSchema(process.env.NOTION_RECIPES_DATABASE_ID),
+      mapping: await getDatabaseSchema(notionRecipesDatabaseId),
       results,
     })
   } catch (error) {
