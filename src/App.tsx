@@ -3042,18 +3042,10 @@ function App() {
                         ? !fitbitBridge.nativePermissionsGranted || isFitbitSyncing
                         : !fitbitBridge.connected || isFitbitSyncing
                     }
-                  >
-                    {isFitbitSyncing ? 'Syncing…' : usesNativePhoneShell ? 'Sync from this phone' : 'Pull latest phone data'}
-                  </button>
+                >
+                  {isFitbitSyncing ? 'Syncing…' : usesNativePhoneShell ? 'Sync from this phone' : 'Pull latest phone data'}
+                </button>
                 </div>
-              </section>
-              <section className="sync-summary-card">
-                <span>Shared dashboard</span>
-                <strong>{hasSupabaseConfig ? 'Desktop is reading shared data' : 'Shared sync not configured'}</strong>
-              </section>
-              <section className="sync-summary-card">
-                <span>Phone ingest path</span>
-                <strong>{hasImportedPhoneMetric ? 'Usable health data landed' : 'Secure phone ingest API is ready'}</strong>
               </section>
             </div>
             <div className="metric-grid">
